@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Analytics Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🚀 Social Media Analytics Dashboard</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="platform-tabs">
+            <button class="tab active" onclick="switchPlatform('facebook')">
+                📘 Facebook
+            </button>
+            <button class="tab disabled" onclick="switchPlatform('instagram')">
+                📷 Instagram (Coming Soon)
+            </button>
+            <button class="tab disabled" onclick="switchPlatform('tiktok')">
+                🎵 TikTok (Coming Soon)
+            </button>
+        </div>
+
+        <!-- Facebook Platform -->
+        <div id="facebook-platform" class="platform-content active">
+            <div class="card">
+                <h3>🔐 Authentication</h3>
+                <div id="auth-status">
+                    <span class="status disconnected">Not Connected</span>
+                </div>
+                <button class="btn btn-primary" onclick="Facebook.login()">Connect Facebook</button>
+                <button class="btn btn-danger" onclick="Facebook.logout()" id="logout-btn"
+                    style="display:none;">Disconnect</button>
+            </div>
+
+            <div id="facebook-features" class="hidden">
+                <div class="feature-grid">
+                    <!-- Ad Insights -->
+                    <div class="card">
+                        <h3>📊 Ad Insights</h3>
+                        <div class="input-group">
+                            <label>Ad Account</label>
+                            <select id="ad-account-select">
+                                <option value="">Select account...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="Facebook.Ads.getInsights()">Get Insights</button>
+                        <div id="ad-insights-results" class="results"></div>
+                    </div>
+
+                    <!-- Pages -->
+                    <div class="card">
+                        <h3>📄 Pages</h3>
+                        <button class="btn btn-primary" onclick="Facebook.Pages.getPages()">Load Pages</button>
+                        <div class="input-group" id="page-select-group" style="display:none;">
+                            <label>Select Page</label>
+                            <select id="page-select">
+                                <option value="">Select page...</option>
+                            </select>
+                        </div>
+                        <div id="pages-results" class="results"></div>
+                    </div>
+
+                    <!-- Posts -->
+                    <div class="card">
+                        <h3>📝 Posts</h3>
+                        <div class="input-group">
+                            <label>Page</label>
+                            <select id="posts-page-select">
+                                <option value="">Select page...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="Facebook.Posts.getPosts()">Load Posts</button>
+                        <div id="posts-results" class="results"></div>
+                    </div>
+                </div>
+
+                <!-- Post Insights Section -->
+                <div id="post-insights-section" class="hidden">
+                    <div class="card">
+                        <h3>📈 Post Analytics</h3>
+                        <div id="post-insights-content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instagram Platform -->
+        <div id="instagram-platform" class="platform-content">
+            <div class="card">
+                <h3>📷 Instagram</h3>
+                <p>Instagram integration coming soon...</p>
+            </div>
+        </div>
+
+        <!-- TikTok Platform -->
+        <div id="tiktok-platform" class="platform-content">
+            <div class="card">
+                <h3>🎵 TikTok</h3>
+                <p>TikTok integration coming soon...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+
+</html>
