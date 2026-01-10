@@ -21,21 +21,16 @@ class Settings(BaseSettings):
     facebook_redirect_uri: str = ""
     
     # Application Settings
-    secret_key: str = "dev-secret-key-change-in-production"
+    secret_key: str
     
     # Facebook API Version
     facebook_api_version: str = "v24.0"
     
-    # Session Storage (memory, redis, or postgresql)
-    session_storage: str = "postgresql"
+    # Session Storage (memory or postgresql)
+    session_storage: str
     
     # PostgreSQL Database URL
-    database_url: str = "postgresql://postgres:password@localhost:5432/adsync_db"
-    
-    # Redis Configuration (optional, only if using redis)
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    redis_db: int = 0
+    database_url: str
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
