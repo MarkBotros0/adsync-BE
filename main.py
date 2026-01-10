@@ -102,6 +102,11 @@ async def config_check():
             "redirect_uri": settings.facebook_redirect_uri,
             "api_version": settings.facebook_api_version
         },
+        "deployment": {
+            "deployed_url": settings.deployed_url,
+            "app_url": settings.app_url,
+            "base_url": settings.base_url
+        },
         "session_storage": settings.session_storage,
         "ready": bool(settings.facebook_app_id and settings.facebook_app_secret)
     }
