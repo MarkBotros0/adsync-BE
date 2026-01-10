@@ -9,14 +9,16 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
+    # Application Settings (required)
+    app_url: str
+    
     # Facebook OAuth Configuration
     facebook_app_id: str = ""
     facebook_app_secret: str = ""
-    facebook_redirect_uri: str = "http://localhost:8000/facebook/auth/callback"
+    facebook_redirect_uri: str = ""
     
     # Application Settings
     secret_key: str = "dev-secret-key-change-in-production"
-    app_url: str = "http://localhost:8000"
     
     # Facebook API Version
     facebook_api_version: str = "v24.0"
@@ -31,6 +33,12 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Auto-generate redirect URI if not provided
+        if not self.facebook_redirect_uri:
+            self.facebook_redirect_uri = f"{self.app_url}/facebook/auth/callback"
     
     class Config:
         env_file = ".env"
