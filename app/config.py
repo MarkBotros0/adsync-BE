@@ -9,8 +9,11 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    # Application Settings (required)
-    app_url: str
+    # Vercel Deployment URL (auto-detected)
+    deployed_url: str = ""
+    
+    # Application URL (can be overridden)
+    app_url: str = ""
     
     # Facebook OAuth Configuration
     facebook_app_id: str = ""
@@ -36,9 +39,27 @@ class Settings(BaseSettings):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Auto-generate redirect URI if not provided
+        
+        if not self.deployed_url:
+            self.deployed_url = os.getenv(
+                "VERCEL_PROJECT_PRODUCTION_URL",
+                os.getenv("VERCEL_URL", "localhost:8000")
+            )
+        
+        if not self.app_url:
+            self.app_url = self.base_url
+        
         if not self.facebook_redirect_uri:
             self.facebook_redirect_uri = f"{self.app_url}/facebook/auth/callback"
+    
+    @property
+    def base_url(self) -> str:
+        """Construct proper base URL with protocol"""
+        url = self.deployed_url or "localhost:8000"
+        
+        if "localhost" in url:
+            return f"http://{url}"
+        return f"https://{url}"
     
     class Config:
         env_file = ".env"
