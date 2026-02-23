@@ -145,7 +145,7 @@ const Facebook = {
         },
 
         updatePageSelects(pages) {
-            const selects = ['page-select', 'posts-page-select'];
+            const selects = ['page-select', 'posts-page-select', 'insights-page-select', 'general-insights-page-select'];
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 select.innerHTML = '<option value="">Select page...</option>';
@@ -157,6 +157,136 @@ const Facebook = {
                 });
             });
             document.getElementById('page-select-group').style.display = 'block';
+        }
+    },
+
+    Insights: {
+        async getGeneralInsights() {
+            const selectValue = document.getElementById('general-insights-page-select').value;
+            if (!selectValue) {
+                showError('Please select a page');
+                return;
+            }
+
+            const pageData = JSON.parse(selectValue);
+            
+            const resultsDiv = document.getElementById('general-insights-results');
+            resultsDiv.innerHTML = '<div class="loading">Loading page information...</div>';
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/facebook/pages/${pageData.id}/insights?session_id=${sessionId}&page_token=${pageData.token}`
+                );
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const data = result.data;
+                    
+                    // Show the general insights section
+                    document.getElementById('general-insights-section').classList.remove('hidden');
+                    
+                    // Update header info
+                    document.getElementById('general-insights-page-name').textContent = data.page_name;
+                    document.getElementById('general-insights-category').textContent = `Category: ${data.category}`;
+                    
+                    // Update Page Statistics
+                    document.getElementById('fan-count').textContent = formatNumber(data.fan_count);
+                    document.getElementById('followers-count').textContent = formatNumber(data.followers_count);
+                    document.getElementById('rating-count').textContent = formatNumber(data.rating_count);
+                    document.getElementById('overall-rating').textContent = data.overall_star_rating ? data.overall_star_rating.toFixed(1) + ' ⭐' : 'N/A';
+                    
+                    // Update About section
+                    const aboutDiv = document.getElementById('page-about');
+                    if (data.about) {
+                        aboutDiv.innerHTML = `<p style="margin-top: 15px;"><strong>About:</strong><br>${data.about}</p>`;
+                    } else {
+                        aboutDiv.innerHTML = '';
+                    }
+                    
+                    // Update Contact section
+                    const contactDiv = document.getElementById('page-contact');
+                    let contactHtml = '<div style="margin-top: 15px;"><strong>Contact Information:</strong><br>';
+                    if (data.phone) contactHtml += `📞 ${data.phone}<br>`;
+                    if (data.website) contactHtml += `🌐 <a href="${data.website}" target="_blank">${data.website}</a><br>`;
+                    if (data.emails && data.emails.length > 0) contactHtml += `📧 ${data.emails.join(', ')}<br>`;
+                    if (data.link) contactHtml += `🔗 <a href="${data.link}" target="_blank">View on Facebook</a>`;
+                    contactHtml += '</div>';
+                    
+                    if (data.phone || data.website || (data.emails && data.emails.length > 0) || data.link) {
+                        contactDiv.innerHTML = contactHtml;
+                    } else {
+                        contactDiv.innerHTML = '';
+                    }
+                    
+                    resultsDiv.innerHTML = '<div class="success">✅ Page information loaded successfully! Scroll down to view.</div>';
+                    
+                    // Scroll to insights section
+                    document.getElementById('general-insights-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                    resultsDiv.innerHTML = '<div class="error">Failed to load page information.</div>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Error loading page information: ${error.message}</div>`;
+            }
+        },
+
+        async getMessagingInsights() {
+            const selectValue = document.getElementById('insights-page-select').value;
+            if (!selectValue) {
+                showError('Please select a page');
+                return;
+            }
+
+            const pageData = JSON.parse(selectValue);
+            const days = document.getElementById('insights-days-select').value;
+            
+            const resultsDiv = document.getElementById('insights-results');
+            resultsDiv.innerHTML = '<div class="loading">Loading messaging insights...</div>';
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/facebook/pages/${pageData.id}/messaging-insights?session_id=${sessionId}&page_token=${pageData.token}&days=${days}`
+                );
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const data = result.data;
+                    
+                    // Show the messaging insights section
+                    document.getElementById('messaging-insights-section').classList.remove('hidden');
+                    
+                    // Update header info
+                    document.getElementById('insights-page-name').textContent = data.page_name;
+                    document.getElementById('insights-date-range').textContent = 
+                        `${new Date(data.date_range.since).toLocaleDateString()} - ${new Date(data.date_range.until).toLocaleDateString()} (${data.date_range.days} days)`;
+                    
+                    // Update Audience metrics
+                    document.getElementById('total-contacts').textContent = formatNumber(data.audience.total_contacts);
+                    document.getElementById('new-contacts').textContent = formatNumber(data.audience.new_contacts);
+                    document.getElementById('returning-contacts').textContent = formatNumber(data.audience.returning_contacts);
+                    document.getElementById('contacts-orders').textContent = formatNumber(data.audience.contacts_with_orders);
+                    
+                    // Update Responsiveness metrics
+                    document.getElementById('response-rate').textContent = data.responsiveness.response_rate;
+                    document.getElementById('response-time').textContent = data.responsiveness.response_time;
+                    document.getElementById('busiest-day').textContent = data.responsiveness.busiest_day;
+                    
+                    // Update Conversations metrics
+                    document.getElementById('conversations-started').textContent = formatNumber(data.conversations.messaging_conversations_started);
+                    
+                    // Update Outcomes
+                    document.getElementById('outcomes-count').textContent = `1 of ${data.outcomes.total_outcomes}`;
+                    
+                    resultsDiv.innerHTML = '<div class="success">✅ Messaging insights loaded successfully! Scroll down to view.</div>';
+                    
+                    // Scroll to insights section
+                    document.getElementById('messaging-insights-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                    resultsDiv.innerHTML = '<div class="error">Failed to load insights. The page may not have sufficient permissions or data.</div>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Error loading insights: ${error.message}</div>`;
+            }
         }
     },
 
@@ -294,6 +424,25 @@ function getReactionEmoji(type) {
         'care': '🤗'
     };
     return emojis[type.toLowerCase()] || '👍';
+}
+
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    if (typeof num === 'string') return num;
+    return num.toLocaleString();
+}
+
+function toggleSection(sectionName) {
+    const section = document.getElementById(`${sectionName}-section`);
+    const btn = event.target;
+    
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        btn.textContent = '▼';
+    } else {
+        section.style.display = 'none';
+        btn.textContent = '▶';
+    }
 }
 
 async function checkConfiguration() {

@@ -65,7 +65,9 @@ async def facebook_callback(code: Optional[str] = None, state: Optional[str] = N
         }
         session_store.set(session_id, session_data, ttl=86400)
         
-        return RedirectResponse(url=f"/?session_id={session_id}")
+        # Redirect to frontend with session_id
+        frontend_url = settings.app_url or "http://localhost:3000"
+        return RedirectResponse(url=f"{frontend_url}/?session_id={session_id}")
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")

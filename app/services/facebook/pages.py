@@ -14,12 +14,12 @@ class PagesService(APIClient):
         )
     
     async def fetch_page_posts(self, page_id: str, limit: int = 25) -> Dict[str, Any]:
-        """Fetch posts from a specific page"""
+        """Fetch posts from a specific page with engagement data"""
         try:
             return await self.get(
                 f"{page_id}/posts",
                 params={
-                    "fields": "id,message,created_time,permalink_url,story",
+                    "fields": "id,message,created_time,permalink_url,story,shares,likes.summary(true),comments.summary(true),reactions.summary(true)",
                     "limit": limit
                 }
             )
@@ -28,7 +28,7 @@ class PagesService(APIClient):
                 return await self.get(
                     f"{page_id}/feed",
                     params={
-                        "fields": "id,message,created_time,permalink_url,story",
+                        "fields": "id,message,created_time,permalink_url,story,shares,likes.summary(true),comments.summary(true),reactions.summary(true)",
                         "limit": limit
                     }
                 )

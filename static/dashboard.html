@@ -80,6 +80,180 @@
                         <button class="btn btn-primary" onclick="Facebook.Posts.getPosts()">Load Posts</button>
                         <div id="posts-results" class="results"></div>
                     </div>
+
+                    <!-- Page General Insights -->
+                    <div class="card">
+                        <h3>📊 Page Insights</h3>
+                        <div class="input-group">
+                            <label>Select Page</label>
+                            <select id="general-insights-page-select">
+                                <option value="">Select page...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="Facebook.Insights.getGeneralInsights()">Load Page
+                            Info</button>
+                        <div id="general-insights-results" class="results"></div>
+                    </div>
+
+                    <!-- Page Insights / Messaging -->
+                    <div class="card">
+                        <h3>💬 Messaging Insights</h3>
+                        <div class="input-group">
+                            <label>Select Page</label>
+                            <select id="insights-page-select">
+                                <option value="">Select page...</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Time Period (days)</label>
+                            <select id="insights-days-select">
+                                <option value="7">Last 7 days</option>
+                                <option value="14">Last 14 days</option>
+                                <option value="28">Last 28 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="Facebook.Insights.getMessagingInsights()">Load
+                            Insights</button>
+                        <div id="insights-results" class="results"></div>
+                    </div>
+                </div>
+
+                <!-- General Page Insights Dashboard -->
+                <div id="general-insights-section" class="hidden">
+                    <div class="insights-header">
+                        <h2>📊 Page Information</h2>
+                        <p id="general-insights-page-name"></p>
+                        <p id="general-insights-category"></p>
+                    </div>
+
+                    <!-- General Metrics Section -->
+                    <div class="card insights-card">
+                        <div class="insights-section-header">
+                            <h3>📈 Page Statistics</h3>
+                            <button class="expand-btn" onclick="toggleSection('general-metrics')">▼</button>
+                        </div>
+                        <div id="general-metrics-section" class="insights-content">
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-label">Total Fans</div>
+                                    <div class="metric-value" id="fan-count">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Total Followers</div>
+                                    <div class="metric-value" id="followers-count">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Rating Count</div>
+                                    <div class="metric-value" id="rating-count">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Overall Rating</div>
+                                    <div class="metric-value" id="overall-rating">0</div>
+                                </div>
+                            </div>
+                            <div class="page-details">
+                                <div id="page-about"></div>
+                                <div id="page-contact"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Messaging Insights Dashboard -->
+                <div id="messaging-insights-section" class="hidden">
+                    <div class="insights-header">
+                        <h2>📊 Messaging Analytics Dashboard</h2>
+                        <p id="insights-page-name"></p>
+                        <p id="insights-date-range"></p>
+                    </div>
+
+                    <!-- Audience Section -->
+                    <div class="card insights-card">
+                        <div class="insights-section-header">
+                            <h3>👥 Audience</h3>
+                            <button class="expand-btn" onclick="toggleSection('audience')">▼</button>
+                        </div>
+                        <div id="audience-section" class="insights-content">
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-label">Total contacts <span class="info-icon"
+                                            title="Total page followers">ⓘ</span></div>
+                                    <div class="metric-value" id="total-contacts">0</div>
+                                    <div class="metric-change" id="total-contacts-change">.. 0%</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">New contacts</div>
+                                    <div class="metric-value" id="new-contacts">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Returning contacts</div>
+                                    <div class="metric-value" id="returning-contacts">--</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Contacts with orders</div>
+                                    <div class="metric-value" id="contacts-orders">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Responsiveness Section -->
+                    <div class="card insights-card">
+                        <div class="insights-section-header">
+                            <h3>⚡ Responsiveness</h3>
+                            <button class="expand-btn" onclick="toggleSection('responsiveness')">▼</button>
+                        </div>
+                        <div id="responsiveness-section" class="insights-content">
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-label">Response rate <span class="info-icon"
+                                            title="Percentage of messages responded to">ⓘ</span></div>
+                                    <div class="metric-value" id="response-rate">--%</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Response time <span class="info-icon"
+                                            title="Average time to respond">ⓘ</span></div>
+                                    <div class="metric-value" id="response-time">--</div>
+                                </div>
+                            </div>
+                            <div class="busiest-day-card">
+                                <p><strong>Your busiest day last week was</strong></p>
+                                <p id="busiest-day">Saturday, 28 December.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Conversations Section -->
+                    <div class="card insights-card">
+                        <div class="insights-section-header">
+                            <h3>💬 Conversations</h3>
+                            <button class="expand-btn" onclick="toggleSection('conversations')">▼</button>
+                        </div>
+                        <div id="conversations-section" class="insights-content">
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-label">Messaging conversations started <span class="info-icon"
+                                            title="New conversations initiated">ⓘ</span></div>
+                                    <div class="metric-value" id="conversations-started">0</div>
+                                    <div class="metric-change" id="conversations-change">.. 0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Outcomes Section -->
+                    <div class="card insights-card">
+                        <div class="insights-section-header">
+                            <h3>🎯 Outcomes</h3>
+                            <button class="expand-btn" onclick="toggleSection('outcomes')">▼</button>
+                        </div>
+                        <div id="outcomes-section" class="insights-content">
+                            <div class="outcomes-info">
+                                <p id="outcomes-count">1 of 5</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Post Insights Section -->
@@ -111,5 +285,7 @@
 
     <script src="/static/js/dashboard.js"></script>
 </body>
+
+</html>
 
 </html>

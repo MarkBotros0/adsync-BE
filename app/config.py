@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     secret_key: str
     
     # Facebook API Version
-    facebook_api_version: str = "v24.0"
+    facebook_api_version: str = "v21.0"
     
     # Session Storage (memory or postgresql)
     session_storage: str
