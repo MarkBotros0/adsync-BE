@@ -4,6 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.facebook import auth, ads, pages
+from app.routers.brands import auth as brands_auth
+from app.routers.subscriptions import router as subscriptions_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -41,6 +43,27 @@ if os.path.exists(static_dir):
 app.include_router(auth.router)
 app.include_router(ads.router)
 app.include_router(pages.router)
+app.include_router(brands_auth.router)
+app.include_router(subscriptions_router.router)
+
+
+@app.on_event("startup")
+async def on_startup():
+    """Run Alembic migrations and seed default subscription plans."""
+    from alembic.config import Config
+    from alembic import command
+    from app.database import get_session_local
+    from app.repositories.subscription import SubscriptionRepository
+
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
+    SessionLocal = get_session_local()
+    db = SessionLocal()
+    try:
+        SubscriptionRepository(db).seed_defaults()
+    finally:
+        db.close()
 
 
 @app.get("/")

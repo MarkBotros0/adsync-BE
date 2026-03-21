@@ -36,5 +36,5 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables"""
-    Base.metadata.create_all(bind=get_engine())
+    """Deprecated: use Alembic migrations instead (`alembic upgrade head`)."""
+    raise RuntimeError("Use 'alembic upgrade head' to manage the schema.")
