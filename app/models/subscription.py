@@ -9,7 +9,7 @@ class SubscriptionModel(Base):
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False, index=True)  # e.g. free, starter, pro, enterprise
+    name = Column(String, unique=True, nullable=False, index=True)  # e.g. free, starter, pro
     display_name = Column(String, nullable=False)
     description = Column(String)
     price_monthly = Column(Integer, default=0)   # price in cents
@@ -101,31 +101,6 @@ DEFAULT_SUBSCRIPTIONS = [
             "instagram": True,
             "tiktok": True,
             "export": True,
-        },
-    },
-    {
-        "name": "enterprise",
-        "display_name": "Enterprise",
-        "description": "Unlimited access with dedicated support and custom integrations.",
-        "price_monthly": 0,   # custom pricing
-        "price_yearly": 0,
-        "features": {
-            "max_brands": -1,    # -1 = unlimited
-            "max_pages": -1,
-            "max_ad_accounts": -1,
-            "mentions_limit": -1,
-            "analytics": True,
-            "ai_digest": True,
-            "alerts": True,
-            "reports": True,
-            "team_members": -1,
-            "influencer_tracking": True,
-            "instagram": True,
-            "tiktok": True,
-            "export": True,
-            "custom_integrations": True,
-            "dedicated_support": True,
-            "sla": True,
         },
     },
 ]

@@ -1,4 +1,7 @@
 import os
+import time
+import logging
+import logging.config
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -10,6 +13,37 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# ── Logging setup ─────────────────────────────────────────────────────────────
+
+logging.config.dictConfig({
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+        },
+    },
+    "root": {
+        "level": "INFO",
+        "handlers": ["console"],
+    },
+    "loggers": {
+        "app": {"level": "DEBUG", "propagate": True},
+        "uvicorn.access": {"level": "WARNING", "propagate": False},  # suppress noisy uvicorn access log
+    },
+})
+
+logger = logging.getLogger("app")
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 app = FastAPI(
     title="Social Media Sync API",
     description="API for syncing and analyzing social media data (Facebook, Instagram, TikTok) with OAuth authentication",
@@ -17,9 +51,25 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s → %s  (%.1f ms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Catch all exceptions and return JSON"""
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
         content={
@@ -52,18 +102,34 @@ async def on_startup():
     """Run Alembic migrations and seed default subscription plans."""
     from alembic.config import Config
     from alembic import command
-    from app.database import get_session_local
+    from app.database import get_session_local, get_engine, Base
     from app.repositories.subscription import SubscriptionRepository
+    import app.models.brand         # noqa: ensure ORM model is registered
+    import app.models.subscription  # noqa: ensure ORM model is registered
 
-    alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
+    # Safety net: create any missing tables (handles fresh DBs and migration gaps)
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+
+    # Run Alembic migrations (idempotent — won't re-apply already-applied revisions)
+    try:
+        logger.info("Running Alembic migrations…")
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Migrations complete")
+    except Exception as exc:
+        logger.warning("Migration step skipped (schema may already be up to date): %s", exc)
 
     SessionLocal = get_session_local()
     db = SessionLocal()
     try:
+        logger.info("Seeding default subscription plans…")
         SubscriptionRepository(db).seed_defaults()
+        logger.info("Subscription seed complete")
     finally:
         db.close()
+
+    logger.info("Server ready — session_storage=%s", settings.session_storage)
 
 
 @app.get("/")
