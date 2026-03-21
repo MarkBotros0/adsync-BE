@@ -107,29 +107,47 @@ async def on_startup():
     import app.models.brand         # noqa: ensure ORM model is registered
     import app.models.subscription  # noqa: ensure ORM model is registered
 
-    # Safety net: create any missing tables (handles fresh DBs and migration gaps)
-    engine = get_engine()
-    Base.metadata.create_all(bind=engine)
+    # Safety net: create any missing tables
+    try:
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        logger.error("Could not connect to database: %s", exc)
+        logger.error("Check DATABASE_URL in .env and ensure the database is reachable.")
+        raise  # re-raise so the server doesn't start in a broken state
 
-    # Run Alembic migrations (idempotent — won't re-apply already-applied revisions)
+    # Run Alembic migrations
     try:
         logger.info("Running Alembic migrations…")
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
         logger.info("Migrations complete")
     except Exception as exc:
-        logger.warning("Migration step skipped (schema may already be up to date): %s", exc)
+        logger.warning("Migration step skipped: %s", exc)
 
-    SessionLocal = get_session_local()
-    db = SessionLocal()
+    # Seed subscription plans
     try:
-        logger.info("Seeding default subscription plans…")
-        SubscriptionRepository(db).seed_defaults()
-        logger.info("Subscription seed complete")
-    finally:
-        db.close()
+        db = get_session_local()()
+        try:
+            SubscriptionRepository(db).seed_defaults()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("Subscription seed skipped: %s", exc)
 
-    logger.info("Server ready — session_storage=%s", settings.session_storage)
+    # One-time cleanup: remove stale state entries left by the old session_storage design
+    try:
+        from sqlalchemy import text as _text
+        _db = get_session_local()()
+        _db.execute(_text(
+            "DELETE FROM facebook_sessions WHERE session_id LIKE 'state_%' OR access_token = ''"
+        ))
+        _db.commit()
+        _db.close()
+    except Exception as exc:
+        logger.warning("Could not clean up stale state entries: %s", exc)
+
+    logger.info("Server ready")
 
 
 @app.get("/")

@@ -1,24 +1,37 @@
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from app.services.facebook.pages import PagesService
 from app.services.facebook.posts import PostsService
 from app.services.facebook.insights import InsightsService
-from app.services.session_storage import get_session_storage
+from app.repositories.facebook_session import FacebookSessionRepository
+from app.database import get_session_local
 from app.utils.facebook.formatters import format_post_insights
-from app.config import get_settings
 
 router = APIRouter(prefix="/facebook", tags=["Facebook Pages"])
 
-settings = get_settings()
-session_store = get_session_storage(settings.session_storage)
+
+def _get_facebook_session(session_id: str) -> dict:
+    """Look up a Facebook session by ID and return its data dict, or raise 401."""
+    db = get_session_local()()
+    try:
+        repo = FacebookSessionRepository(db)
+        session = repo.get_by_session_id(session_id)
+        if not session or session.expires_at.replace(tzinfo=None) < datetime.utcnow():
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        return {
+            "user_id": session.user_id,
+            "user_name": session.user_name,
+            "access_token": session.access_token,
+        }
+    finally:
+        db.close()
 
 
 @router.get("/pages")
 async def get_pages(session_id: str):
     """Get all Facebook Pages the user manages"""
-    session = session_store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    session = _get_facebook_session(session_id)
     
     pages_service = PagesService(access_token=session["access_token"])
     
@@ -39,9 +52,7 @@ async def get_pages(session_id: str):
 @router.get("/pages/{page_id}/posts")
 async def get_page_posts(page_id: str, session_id: str, limit: int = 25, page_token: Optional[str] = None):
     """Get posts from a specific Facebook Page with engagement metrics"""
-    session = session_store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    session = _get_facebook_session(session_id)
     
     if limit > 100:
         limit = 100
@@ -100,9 +111,7 @@ async def get_page_posts(page_id: str, session_id: str, limit: int = 25, page_to
 @router.get("/posts/{post_id}/insights")
 async def get_post_insights(post_id: str, session_id: str, page_token: Optional[str] = None):
     """Get insights for a specific Facebook post"""
-    session = session_store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    session = _get_facebook_session(session_id)
     
     if not post_id or '_' not in post_id:
         raise HTTPException(status_code=400, detail=f"Invalid post ID format: '{post_id}'")
@@ -148,9 +157,7 @@ async def get_page_insights(page_id: str, session_id: str, page_token: Optional[
     
     Returns basic page information without time period
     """
-    session = session_store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    session = _get_facebook_session(session_id)
     
     access_token = page_token if page_token else session["access_token"]
     
@@ -187,9 +194,7 @@ async def get_page_messaging_insights(page_id: str, session_id: str, page_token:
     
     Returns audience, responsiveness, conversations, and outcomes metrics for messaging
     """
-    session = session_store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    session = _get_facebook_session(session_id)
     
     if days < 1 or days > 90:
         raise HTTPException(status_code=400, detail="Days parameter must be between 1 and 90")
