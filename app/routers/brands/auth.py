@@ -68,6 +68,10 @@ def _require_brand(credentials: HTTPAuthorizationCredentials = Depends(_bearer))
         if brand.session_key != token_session_key:
             raise HTTPException(status_code=401, detail="Session invalidated — please log in again")
 
+        # Trigger lazy load while the session is still open so that
+        # endpoints can safely access brand.subscription after db.close().
+        _ = brand.subscription
+
         return brand
     finally:
         repo.db.close()

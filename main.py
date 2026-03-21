@@ -7,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.facebook import auth, ads, pages
+from app.routers.instagram import media as instagram_media
+from app.routers.instagram import auth as instagram_auth
 from app.routers.brands import auth as brands_auth
 from app.routers.subscriptions import router as subscriptions_router
 from app.config import get_settings
@@ -93,6 +95,8 @@ if os.path.exists(static_dir):
 app.include_router(auth.router)
 app.include_router(ads.router)
 app.include_router(pages.router)
+app.include_router(instagram_media.router)
+app.include_router(instagram_auth.router)
 app.include_router(brands_auth.router)
 app.include_router(subscriptions_router.router)
 
@@ -104,8 +108,9 @@ async def on_startup():
     from alembic import command
     from app.database import get_session_local, get_engine, Base
     from app.repositories.subscription import SubscriptionRepository
-    import app.models.brand         # noqa: ensure ORM model is registered
-    import app.models.subscription  # noqa: ensure ORM model is registered
+    import app.models.brand              # noqa: ensure ORM model is registered
+    import app.models.subscription       # noqa: ensure ORM model is registered
+    import app.models.instagram_session  # noqa: ensure ORM model is registered
 
     # Safety net: create any missing tables
     try:
@@ -165,7 +170,7 @@ def api_info():
     return {
         "message": "Social Media Sync API",
         "version": "2.0.0",
-        "platforms": ["Facebook", "Instagram (coming soon)", "TikTok (coming soon)"],
+        "platforms": ["Facebook", "Instagram", "TikTok (coming soon)"],
         "endpoints": {
             "docs": "/docs",
             "dashboard": "/",

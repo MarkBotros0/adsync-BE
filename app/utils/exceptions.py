@@ -3,6 +3,11 @@ class FacebookAPIError(Exception):
     pass
 
 
+class InstagramAPIError(Exception):
+    """Raised when Instagram Graph API returns an error"""
+    pass
+
+
 class AuthenticationError(Exception):
     """Raised when authentication fails"""
     pass

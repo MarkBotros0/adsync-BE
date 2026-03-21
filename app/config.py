@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     facebook_app_secret: str = ""
     facebook_redirect_uri: str = ""
 
+    # Instagram OAuth Configuration (Business Login for Instagram)
+    instagram_app_id: str = ""
+    instagram_app_secret: str = ""
+    instagram_redirect_uri: str = ""
+
     # Application Settings
     secret_key: str
 
@@ -58,6 +63,9 @@ class Settings(BaseSettings):
         
         if not self.facebook_redirect_uri:
             self.facebook_redirect_uri = f"{self.app_url}/facebook/auth/callback"
+
+        if not self.instagram_redirect_uri:
+            self.instagram_redirect_uri = f"{self.app_url}/instagram/auth/callback"
     
     @property
     def base_url(self) -> str:
