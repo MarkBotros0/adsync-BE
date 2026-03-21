@@ -19,7 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    pass
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'sessions' in inspector.get_table_names():
+        op.drop_table('sessions')
 
 
 def downgrade() -> None:
