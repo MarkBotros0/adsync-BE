@@ -36,7 +36,7 @@ async def tiktok_connect(brand_id: int | None = Depends(optional_brand_id)):
 
     svc = TikTokAuthService()
     login_data = svc.get_login_url()
-    state_store.set(login_data["state"], brand_id=brand_id)
+    state_store.set(login_data["state"], brand_id=brand_id, code_verifier=login_data["code_verifier"])
 
     return {
         "login_url": login_data["login_url"],
@@ -62,15 +62,15 @@ async def tiktok_callback(
     if not state:
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
-    valid, brand_id = state_store.verify_and_delete(state)
-    if not valid:
+    valid, brand_id, code_verifier = state_store.verify_and_delete_pkce(state)
+    if not valid or not code_verifier:
         raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
 
     try:
         svc = TikTokAuthService()
 
-        # Exchange code for access + refresh tokens
-        token_data = await svc.exchange_code_for_token(code)
+        # Exchange code for access + refresh tokens (PKCE required)
+        token_data = await svc.exchange_code_for_token(code, code_verifier)
         access_token = token_data["access_token"]
         open_id = token_data["open_id"]
         refresh_token = token_data["refresh_token"]

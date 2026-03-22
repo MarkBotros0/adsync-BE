@@ -2,6 +2,8 @@
 TikTok Login Kit OAuth 2.0 service.
 Uses open.tiktokapis.com — access tokens expire in 24h, refresh tokens in 365d.
 """
+import hashlib
+import base64
 import secrets
 import httpx
 from app.config import get_settings
@@ -21,10 +23,20 @@ class TikTokAuthService:
         self.client_secret = settings.tiktok_client_secret
         self.redirect_uri = settings.tiktok_redirect_uri
 
+    @staticmethod
+    def generate_pkce() -> tuple[str, str]:
+        """Generate a PKCE code_verifier and code_challenge (S256 method)."""
+        code_verifier = secrets.token_urlsafe(32)  # 43-char URL-safe string
+        digest = hashlib.sha256(code_verifier.encode()).digest()
+        code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+        return code_verifier, code_challenge
+
     def get_login_url(self, state: str | None = None) -> dict[str, str]:
-        """Build the TikTok authorization URL."""
+        """Build the TikTok authorization URL with PKCE (required by sandbox and production)."""
         if not state:
             state = secrets.token_urlsafe(32)
+
+        code_verifier, code_challenge = self.generate_pkce()
 
         scopes = [
             "user.info.basic",
@@ -39,15 +51,18 @@ class TikTokAuthService:
             f"redirect_uri={self.redirect_uri}",
             f"state={state}",
             "response_type=code",
+            f"code_challenge={code_challenge}",
+            "code_challenge_method=S256",
         ])
 
         return {
             "login_url": f"{_AUTH_URL}?{params}",
             "state": state,
+            "code_verifier": code_verifier,
         }
 
-    async def exchange_code_for_token(self, code: str) -> dict:
-        """Exchange an authorization code for access + refresh tokens."""
+    async def exchange_code_for_token(self, code: str, code_verifier: str) -> dict:
+        """Exchange an authorization code for access + refresh tokens (PKCE required)."""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 _TOKEN_URL,
@@ -58,6 +73,7 @@ class TikTokAuthService:
                     "code": code,
                     "grant_type": "authorization_code",
                     "redirect_uri": self.redirect_uri,
+                    "code_verifier": code_verifier,
                 },
             )
             if response.status_code != 200:

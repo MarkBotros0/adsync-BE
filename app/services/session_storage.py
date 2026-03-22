@@ -35,9 +35,9 @@ class StateStorage:
     def __init__(self):
         self._mem = MemoryStorage()
 
-    def set(self, state: str, brand_id: int | None = None) -> None:
-        """Store state with 10-minute TTL."""
-        self._mem.set(state, {"brand_id": brand_id})
+    def set(self, state: str, brand_id: int | None = None, code_verifier: str | None = None) -> None:
+        """Store state with 10-minute TTL. Optionally store a PKCE code_verifier."""
+        self._mem.set(state, {"brand_id": brand_id, "code_verifier": code_verifier})
 
     def verify_and_delete(self, state: str):
         """Verify state and delete it. Returns (is_valid, brand_id)."""
@@ -46,3 +46,11 @@ class StateStorage:
             return False, None
         self._mem.delete(state)
         return True, data.get("brand_id")
+
+    def verify_and_delete_pkce(self, state: str):
+        """Verify state and delete it. Returns (is_valid, brand_id, code_verifier)."""
+        data = self._mem.get(state)
+        if data is None:
+            return False, None, None
+        self._mem.delete(state)
+        return True, data.get("brand_id"), data.get("code_verifier")
