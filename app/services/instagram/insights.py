@@ -7,13 +7,15 @@ _FEED_METRICS = [
     "impressions", "reach", "likes", "comments", "shares",
     "saved", "total_interactions", "profile_visits", "follows",
 ]
+# video_views is only valid for feed VIDEO posts (not IMAGE or CAROUSEL_ALBUM)
+_FEED_VIDEO_METRICS = _FEED_METRICS + ["video_views"]
 _REEL_METRICS = [
     "plays", "reach", "likes", "comments", "shares",
     "saved", "total_interactions",
 ]
 _STORY_METRICS = [
     "impressions", "reach", "exits", "taps_forward", "taps_back",
-    "replies", "total_interactions", "profile_visits", "follows",
+    "replies", "shares", "total_interactions", "profile_visits", "follows",
 ]
 
 
@@ -161,6 +163,7 @@ class InstagramInsightsService(InstagramAPIClient):
         self,
         media_id: str,
         media_product_type: str = "FEED",
+        media_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Fetch insights for a single IG Media object.
@@ -169,13 +172,19 @@ class InstagramInsightsService(InstagramAPIClient):
             media_id: IG Media ID.
             media_product_type: 'FEED', 'REELS', or 'STORY'.
                                 Determines which metrics are requested.
+            media_type: 'IMAGE', 'VIDEO', or 'CAROUSEL_ALBUM'.
+                        When FEED + VIDEO, video_views is added to the metric list.
         """
         mpt = (media_product_type or "FEED").upper()
+        mt = (media_type or "").upper()
 
         if mpt == "REELS":
             metrics = _REEL_METRICS
         elif mpt == "STORY":
             metrics = _STORY_METRICS
+        elif mt == "VIDEO":
+            # Feed video — include video_views (not available for IMAGE/CAROUSEL)
+            metrics = _FEED_VIDEO_METRICS
         else:
             metrics = _FEED_METRICS
 
