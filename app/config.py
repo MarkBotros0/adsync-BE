@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     instagram_app_secret: str = ""
     instagram_redirect_uri: str = ""
 
+    # TikTok OAuth Configuration (Login Kit)
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+    tiktok_redirect_uri: str = ""
+
     # Application Settings
     secret_key: str
 
@@ -66,6 +71,9 @@ class Settings(BaseSettings):
 
         if not self.instagram_redirect_uri:
             self.instagram_redirect_uri = f"{self.app_url}/instagram/auth/callback"
+
+        if not self.tiktok_redirect_uri:
+            self.tiktok_redirect_uri = f"{self.app_url}/tiktok/auth/callback"
     
     @property
     def base_url(self) -> str:

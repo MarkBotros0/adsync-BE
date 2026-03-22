@@ -17,7 +17,7 @@ App package: `app/`
 |---|---|---|
 | Facebook | `Docs/facebook/` | Active — routers/services exist |
 | Instagram | `Docs/instagram/` | In progress — docs available, integration pending |
-| TikTok | *(no docs yet)* | Planned |
+| TikTok | `Docs/tiktok/` | Active — docs complete |
 
 ### Facebook Docs (`Docs/facebook/`)
 - `00_README.md` — overview and index
@@ -29,6 +29,17 @@ App package: `app/`
 - `06_instagram_graph_api.md` — Instagram via Facebook Graph API
 - `07_webhooks_errors_rate_limits.md` — Webhooks, error handling, rate limits
 - `08_business_manager_api.md` — Business Manager
+
+### TikTok Docs (`Docs/tiktok/`)
+- `00_README.md` — index + quick-reference cheat sheet (endpoints, tokens, scopes, rate limits, error codes)
+- `01_overview.md` — API products, base URLs, versioning, request/response format, pagination, rate limits, sandbox
+- `02_authentication.md` — OAuth 2.0 flow, PKCE, token types (access 24h / refresh 365d / client 2h), all scopes, token exchange/refresh/revoke, client credentials
+- `03_user_api.md` — User Info endpoint, all 14 fields with scopes, open_id vs union_id
+- `04_video_api.md` — Video List and Video Query endpoints, all video fields, pagination, privacy levels
+- `05_content_posting_api.md` — Direct Post vs Inbox/Draft, PULL vs PUSH, chunk upload specs, video/photo specs, creator info, publish status polling, error codes
+- `06_display_api.md` — Display API overview, available fields, embedding, Display vs Login Kit comparison
+- `07_ads_api.md` — Account hierarchy, campaign/ad group/ad fields, all objective types, reporting metrics (delivery/video/engagement/conversion), async report jobs, audiences
+- `08_webhooks_and_errors.md` — Webhook setup/retry, all error codes, rate limits, retry strategy, sandbox vs production
 
 ### Instagram Docs (`Docs/instagram/`)
 - `00_README.md` — overview and index

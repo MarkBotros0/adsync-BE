@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers.facebook import auth, ads, pages
 from app.routers.instagram import media as instagram_media
 from app.routers.instagram import auth as instagram_auth
+from app.routers.tiktok import auth as tiktok_auth
+from app.routers.tiktok import content as tiktok_content
 from app.routers.brands import auth as brands_auth
 from app.routers.subscriptions import router as subscriptions_router
 from app.config import get_settings
@@ -97,6 +99,8 @@ app.include_router(ads.router)
 app.include_router(pages.router)
 app.include_router(instagram_media.router)
 app.include_router(instagram_auth.router)
+app.include_router(tiktok_auth.router)
+app.include_router(tiktok_content.router)
 app.include_router(brands_auth.router)
 app.include_router(subscriptions_router.router)
 
@@ -111,6 +115,7 @@ async def on_startup():
     import app.models.brand              # noqa: ensure ORM model is registered
     import app.models.subscription       # noqa: ensure ORM model is registered
     import app.models.instagram_session  # noqa: ensure ORM model is registered
+    import app.models.tiktok_session     # noqa: ensure ORM model is registered
 
     # Safety net: create any missing tables
     try:
@@ -170,7 +175,7 @@ def api_info():
     return {
         "message": "Social Media Sync API",
         "version": "2.0.0",
-        "platforms": ["Facebook", "Instagram", "TikTok (coming soon)"],
+        "platforms": ["Facebook", "Instagram", "TikTok"],
         "endpoints": {
             "docs": "/docs",
             "dashboard": "/",
