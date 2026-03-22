@@ -81,12 +81,56 @@ requirements.txt
 
 ---
 
+## Naming Conventions
+
+| Thing | Convention | Example |
+|---|---|---|
+| Files/modules | `snake_case.py` | `brand_auth.py` |
+| Classes | `PascalCase` | `BrandRepository` |
+| Functions/methods | `snake_case` | `get_brand_by_email` |
+| Variables | `snake_case` | `brand_token` |
+| Constants | `SCREAMING_SNAKE_CASE` | `MAX_OTP_ATTEMPTS` |
+| Pydantic schemas | `PascalCase` + suffix | `BrandRegisterRequest`, `BrandResponse` |
+| ORM models | `PascalCase` + `Model` suffix | `BrandModel` |
+
+---
+
 ## Key Conventions
 
 ### Routers
 - **Prefix**: platform-namespaced — `/facebook/...`, `/brands/...`, `/subscriptions/...`
 - Import the module, then access `.router`: `from app.routers.brands import auth as brands_auth` → `app.include_router(brands_auth.router)`
 - For packages with a `router.py` sub-module: `from app.routers.subscriptions import router as sub_router` → `app.include_router(sub_router.router)`
+- Always set `tags=["Domain Name"]` on routers for grouped Swagger docs.
+- Always set explicit `status_code` on endpoints (`201` for create, `200` for reads, etc.).
+- Use `response_model=` to declare the shape of the response — this drives OpenAPI docs and strips extra fields.
+
+```python
+@router.post("/register", response_model=BrandResponse, status_code=201, tags=["Brand Auth"])
+async def register_brand(payload: BrandRegisterRequest, db: Session = Depends(get_db)):
+    ...
+```
+
+### Pydantic Schemas (Request / Response)
+- Keep **ORM models** (`app/models/`) separate from **Pydantic schemas** (request/response validation).
+- ORM models define the database table; Pydantic schemas define what comes in/out of the API.
+- Schema naming: `<Resource>Request` for inputs, `<Resource>Response` for outputs.
+- Use `model_config = ConfigDict(from_attributes=True)` (Pydantic v2) to allow `model_validate(orm_obj)`.
+- Never use `to_dict()` on ORM objects for API responses — use `response_model` + `model_validate`.
+
+```python
+# schemas/brand.py
+from pydantic import BaseModel, EmailStr, ConfigDict
+
+class BrandResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: EmailStr
+    is_active: bool
+    # NOTE: never include hashed_password or session_key here
+```
 
 ### Repositories
 - Every endpoint creates its own DB session via `_get_*_repo()` helpers — **do not share sessions across helpers**.
@@ -102,7 +146,61 @@ requirements.txt
 ### Authentication (Brand JWT)
 - Every JWT embeds `sub` (brand id), `session_key`, `exp`, `iat`, `type`.
 - `session_key` is a UUID stored on the brand row. Rotating it (`rotate_session_key`) immediately invalidates **all** existing tokens — force sign-out.
-- Validate token + session_key on every protected request via `_require_brand` dependency.
+- Validate token + session_key on every protected request via the shared `require_brand` dependency from `app.dependencies`.
+- **Never copy-paste auth logic** — always import `require_brand` and `optional_brand_id` from `app/dependencies.py`.
+
+### Shared Dependencies (`app/dependencies.py`)
+- `require_brand` — validates JWT + session_key, eagerly loads `brand.subscription`, returns the brand ORM object.
+- `optional_brand_id` — returns brand_id from JWT if present, `None` otherwise. Never raises.
+- Import these in every router that needs brand auth instead of writing a local version:
+
+```python
+from app.dependencies import require_brand, optional_brand_id
+
+@router.get("/session")
+async def get_session(brand=Depends(require_brand)):
+    ...
+
+@router.get("/connect")
+async def connect(brand_id: int | None = Depends(optional_brand_id)):
+    ...
+```
+
+### Type Hints
+- **All function signatures must have type hints** — parameters and return types.
+- Use `T | None` (Python 3.10+ union syntax) for nullable values — never `Optional[T]`.
+- Use `list[T]`, `dict[K, V]` (lowercase, Python 3.9+) — never `List`, `Dict`, `Optional` from `typing`.
+- Never use bare `dict` or `list` without type parameters for function signatures.
+- Remove unused `typing` imports when switching to built-in syntax.
+
+### Code Readability & No Duplication
+- **Divide large files** into focused modules — routers over ~200 lines should be split by resource (accounts, media, insights).
+- **Extract shared helpers** into separate modules — never copy-paste functions across router files.
+- Each router file should import shared session/auth helpers rather than defining its own.
+- Session-lookup helpers (e.g., `get_instagram_session`) live in a `session.py` module beside the routers that use them.
+- Use module-level constants for repeated literal sets (e.g., `_VALID_PERIODS = {"day", "week", "days_28", "month"}`).
+
+```python
+# Good — shared, importable
+# routers/instagram/session.py
+def get_instagram_session(session_id: str) -> dict[str, str]: ...
+
+# routers/instagram/content.py
+from app.routers.instagram.session import get_instagram_session
+
+# Bad — copy-pasted
+# Every router file defines its own _get_instagram_session
+```
+
+```python
+# Good
+def get_brand_by_email(email: str) -> Optional[BrandModel]:
+    ...
+
+# Bad — no return type, bare dict
+def get_brand(email):
+    return {"id": 1}
+```
 
 ---
 
@@ -149,6 +247,39 @@ requirements.txt
 
 ---
 
+## Service Layer
+
+- **Routers** handle HTTP: parse request, call service, return response. No business logic.
+- **Services** handle business logic: validation, orchestration, calling external APIs, calling repositories.
+- **Repositories** handle DB access only: no business logic, no HTTP concerns.
+
+```
+Router → Service → Repository → DB
+Router → Service → External API (Facebook, Instagram, TikTok)
+```
+
+- Keep services free of FastAPI types (`Request`, `HTTPException`). A service function should be testable without an HTTP context.
+- Raise plain Python exceptions in services; let the router catch and convert to `HTTPException`.
+
+```python
+# services/brand.py — no FastAPI imports
+def get_brand_or_raise(brand_id: int, repo: BrandRepository) -> BrandModel:
+    brand = repo.get(brand_id)
+    if not brand:
+        raise ValueError(f"Brand {brand_id} not found")
+    return brand
+
+# routers/brands/auth.py — converts to HTTP error
+@router.get("/me")
+def get_me(brand: BrandModel = Depends(_require_brand)):
+    try:
+        return BrandResponse.model_validate(brand)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+```
+
+---
+
 ## Error Handling
 
 ### Global exception handler
@@ -160,6 +291,16 @@ requirements.txt
 - Use `HTTPException` for expected client errors (400, 401, 403, 404, 409).
 - Use `try/finally` (not `try/except`) in endpoints — let exceptions bubble to the global handler; always close DB sessions in `finally`.
 - Never swallow exceptions silently (empty `except: pass`) unless it's a non-critical optional operation (e.g. email send).
+- Always use the correct HTTP status codes:
+
+| Scenario | Status code |
+|---|---|
+| Resource not found | `404` |
+| Already exists (email taken) | `409` |
+| Bad input / validation | `422` (Pydantic handles automatically) |
+| Unauthorized (no/bad token) | `401` |
+| Forbidden (valid token, wrong permission) | `403` |
+| Created successfully | `201` |
 
 ### Startup errors
 - Errors in `@app.on_event("startup")` that are not caught will cause Starlette to return raw 500 responses for **all** subsequent requests, bypassing FastAPI's exception handlers. Always wrap risky startup operations in `try/except`.
@@ -174,6 +315,34 @@ requirements.txt
 - **Session invalidation**: rotate `session_key` to force sign-out of all devices at once.
 - **CORS**: currently `allow_origins=["*"]`. Tighten to specific origins before production (`FRONTEND_URL` env var pattern).
 - **SQL injection**: not possible via SQLAlchemy ORM — never use raw string interpolation in queries.
+- **Secrets in logs**: never log request bodies, tokens, or anything from `[parameters: ...]` SQLAlchemy error output.
+
+---
+
+## Logging
+
+- Use Python's `logging` module — never `print()`.
+- Logger per module: `logger = logging.getLogger(__name__)` at the top of each file.
+- Log at the right level:
+  - `DEBUG` — internal state useful during development
+  - `INFO` — normal operation milestones (server ready, migration complete)
+  - `WARNING` — unexpected but recoverable (skipped optional step)
+  - `ERROR` — something failed that needs attention
+  - `EXCEPTION` (via `logger.exception`) — unhandled exceptions (includes stack trace)
+- Never log sensitive data: passwords, tokens, OTPs, full SQL `[parameters: ...]`.
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+# Good
+logger.info("Brand %d logged in", brand.id)
+logger.warning("Email send skipped: %s", exc)
+
+# Bad
+logger.info(f"Password hash: {hashed_password}")
+print("Error:", exc)
+```
 
 ---
 
@@ -225,3 +394,5 @@ API docs available at `http://localhost:8000/docs`.
 | Registration 409 "Email already registered" | Brand with that email exists in DB | Use a different email or delete the test row |
 | JWT 401 "Session invalidated" | `session_key` was rotated (force sign-out) | Re-login to get a fresh token |
 | Subscriptions endpoint works but brands endpoint 500s | `brands` table missing a column | Run `alembic upgrade head` or restart server (startup `create_all` will fix it) |
+| Endpoint not in Swagger docs | Router not registered in `main.py` | Add `app.include_router(...)` |
+| Response includes unexpected fields | No `response_model` set on endpoint | Add `response_model=YourSchema` to the decorator |

@@ -7,8 +7,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.facebook import auth, ads, pages
-from app.routers.instagram import media as instagram_media
 from app.routers.instagram import auth as instagram_auth
+from app.routers.instagram import accounts as instagram_accounts
+from app.routers.instagram import content as instagram_content
+from app.routers.instagram import insights as instagram_insights
 from app.routers.tiktok import auth as tiktok_auth
 from app.routers.tiktok import content as tiktok_content
 from app.routers.brands import auth as brands_auth
@@ -97,8 +99,10 @@ if os.path.exists(static_dir):
 app.include_router(auth.router)
 app.include_router(ads.router)
 app.include_router(pages.router)
-app.include_router(instagram_media.router)
 app.include_router(instagram_auth.router)
+app.include_router(instagram_accounts.router)
+app.include_router(instagram_content.router)
+app.include_router(instagram_insights.router)
 app.include_router(tiktok_auth.router)
 app.include_router(tiktok_content.router)
 app.include_router(brands_auth.router)

@@ -4,7 +4,6 @@ Uses open.tiktokapis.com — access tokens expire in 24h, refresh tokens in 365d
 """
 import secrets
 import httpx
-from typing import Dict, Optional
 from app.config import get_settings
 
 settings = get_settings()
@@ -22,7 +21,7 @@ class TikTokAuthService:
         self.client_secret = settings.tiktok_client_secret
         self.redirect_uri = settings.tiktok_redirect_uri
 
-    def get_login_url(self, state: Optional[str] = None) -> Dict[str, str]:
+    def get_login_url(self, state: str | None = None) -> dict[str, str]:
         """Build the TikTok authorization URL."""
         if not state:
             state = secrets.token_urlsafe(32)
@@ -47,7 +46,7 @@ class TikTokAuthService:
             "state": state,
         }
 
-    async def exchange_code_for_token(self, code: str) -> Dict:
+    async def exchange_code_for_token(self, code: str) -> dict:
         """Exchange an authorization code for access + refresh tokens."""
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -71,7 +70,7 @@ class TikTokAuthService:
 
         return data
 
-    async def refresh_access_token(self, refresh_token: str) -> Dict:
+    async def refresh_access_token(self, refresh_token: str) -> dict:
         """Obtain a new access token using the refresh token."""
         async with httpx.AsyncClient() as client:
             response = await client.post(

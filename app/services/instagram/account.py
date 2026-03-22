@@ -1,11 +1,11 @@
-from typing import Dict, Any
+from typing import Any
 from app.services.instagram.api_client import InstagramAPIClient
 
 
 class InstagramAccountService(InstagramAPIClient):
     """Service for Instagram account profile data via Instagram Login."""
 
-    async def fetch_profile(self, ig_user_id: str) -> Dict[str, Any]:
+    async def fetch_profile(self, ig_user_id: str) -> dict[str, Any]:
         """Fetch full profile for an Instagram user."""
         return await self.get(
             ig_user_id,

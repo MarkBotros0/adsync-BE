@@ -4,7 +4,6 @@ Uses graph.instagram.com — does NOT require a linked Facebook Page.
 """
 import secrets
 import httpx
-from typing import Dict, Optional
 from app.config import get_settings
 
 settings = get_settings()
@@ -21,7 +20,7 @@ class InstagramAuthService:
         self.app_secret = settings.instagram_app_secret
         self.redirect_uri = settings.instagram_redirect_uri
 
-    def get_login_url(self, state: Optional[str] = None) -> Dict[str, str]:
+    def get_login_url(self, state: str | None = None) -> dict[str, str]:
         """Build the Instagram Business Login authorization URL."""
         if not state:
             state = secrets.token_urlsafe(32)
@@ -46,7 +45,7 @@ class InstagramAuthService:
             "state": state,
         }
 
-    async def exchange_code_for_token(self, code: str) -> Dict:
+    async def exchange_code_for_token(self, code: str) -> dict:
         """Exchange authorization code for a short-lived Instagram User token."""
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -63,7 +62,7 @@ class InstagramAuthService:
                 raise Exception(f"Token exchange failed: {response.text}")
             return response.json()
 
-    async def get_long_lived_token(self, short_lived_token: str) -> Dict:
+    async def get_long_lived_token(self, short_lived_token: str) -> dict:
         """Exchange a short-lived token (1h) for a long-lived token (60 days)."""
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -79,7 +78,7 @@ class InstagramAuthService:
                 raise Exception(f"Long-lived token exchange failed: {response.text}")
             return response.json()
 
-    async def get_user_info(self, access_token: str) -> Dict:
+    async def get_user_info(self, access_token: str) -> dict:
         """Fetch the authenticated Instagram user's profile."""
         async with httpx.AsyncClient() as client:
             response = await client.get(

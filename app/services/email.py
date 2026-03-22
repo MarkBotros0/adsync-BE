@@ -3,6 +3,7 @@
 Mirrors the Refs Project lib/email.ts using the same Gmail credentials
 (GMAIL_USER / GMAIL_APP_PASSWORD env vars) and the same OTP flow.
 """
+import logging
 import random
 import smtplib
 import asyncio
@@ -12,6 +13,8 @@ from email.mime.text import MIMEText
 from functools import partial
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -24,7 +27,7 @@ def generate_verification_code() -> str:
 def _send_mail_sync(to: str, subject: str, html: str) -> bool:
     """Blocking SMTP send — called via executor so it doesn't block the event loop."""
     if not settings.gmail_user or not settings.gmail_app_password:
-        print("ERROR: GMAIL_USER and GMAIL_APP_PASSWORD must be set")
+        logger.warning("Email send skipped: GMAIL_USER and GMAIL_APP_PASSWORD are not configured")
         return False
 
     msg = MIMEMultipart("alternative")
@@ -41,12 +44,12 @@ def _send_mail_sync(to: str, subject: str, html: str) -> bool:
             server.sendmail(settings.gmail_user, to, msg.as_string())
         return True
     except Exception as e:
-        print(f"ERROR sending email: {e}")
+        logger.error("Failed to send email to %s: %s", to, e)
         return False
 
 
 async def _send_mail(to: str, subject: str, html: str) -> bool:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, partial(_send_mail_sync, to, subject, html))
 
 

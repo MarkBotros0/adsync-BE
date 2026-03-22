@@ -1,26 +1,19 @@
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError
 
 from app.services.tiktok.auth import TikTokAuthService
 from app.services.session_storage import StateStorage
-from app.services.jwt_auth import decode_token
-from app.repositories.brand import BrandRepository
 from app.repositories.tiktok_session import TikTokSessionRepository
 from app.database import get_session_local
 from app.config import get_settings
+from app.dependencies import require_brand, optional_brand_id
 
 router = APIRouter(prefix="/tiktok/auth", tags=["TikTok Auth"])
 
 settings = get_settings()
 
 state_store = StateStorage()
-
-_bearer = HTTPBearer(auto_error=False)
-_bearer_required = HTTPBearer()
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -30,47 +23,10 @@ def _get_session_repo() -> TikTokSessionRepository:
     return TikTokSessionRepository(db)
 
 
-def _require_brand(credentials: HTTPAuthorizationCredentials = Depends(_bearer_required)):
-    """Validate brand JWT and return the brand object."""
-    token = credentials.credentials
-    try:
-        payload = decode_token(token)
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    brand_id = int(payload.get("sub", 0))
-    token_session_key = payload.get("session_key")
-
-    db = get_session_local()()
-    try:
-        repo = BrandRepository(db)
-        brand = repo.get_by_id(brand_id)
-        if not brand or not brand.is_active:
-            raise HTTPException(status_code=401, detail="Brand not found or deactivated")
-        if brand.session_key != token_session_key:
-            raise HTTPException(status_code=401, detail="Session invalidated — please log in again")
-        return brand
-    finally:
-        db.close()
-
-
-def _optional_brand_id(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
-) -> Optional[int]:
-    """Extract brand_id from JWT if present; returns None otherwise."""
-    if not credentials:
-        return None
-    try:
-        payload = decode_token(credentials.credentials)
-        return int(payload.get("sub", 0)) or None
-    except (JWTError, ValueError):
-        return None
-
-
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("/connect")
-async def tiktok_connect(brand_id: Optional[int] = Depends(_optional_brand_id)):
+async def tiktok_connect(brand_id: int | None = Depends(optional_brand_id)):
     """Initiate TikTok Login Kit OAuth to connect a TikTok account."""
     if not settings.tiktok_client_key or not settings.tiktok_client_secret:
         raise HTTPException(
@@ -90,10 +46,10 @@ async def tiktok_connect(brand_id: Optional[int] = Depends(_optional_brand_id)):
 
 @router.get("/callback")
 async def tiktok_callback(
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    error: Optional[str] = None,
-    error_description: Optional[str] = None,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
 ):
     """Handle TikTok OAuth callback and store the session."""
     if error:
@@ -208,7 +164,7 @@ async def tiktok_refresh_token(session_id: str):
 
 
 @router.get("/session")
-async def get_tiktok_session(brand=Depends(_require_brand)):
+async def get_tiktok_session(brand=Depends(require_brand)):
     """Return the TikTok session connected to the authenticated brand."""
     repo = _get_session_repo()
     try:
@@ -226,7 +182,7 @@ async def get_tiktok_session(brand=Depends(_require_brand)):
 
 
 @router.delete("/disconnect")
-async def disconnect_tiktok(brand=Depends(_require_brand)):
+async def disconnect_tiktok(brand=Depends(require_brand)):
     """Disconnect the TikTok account linked to the authenticated brand."""
     repo = _get_session_repo()
     try:

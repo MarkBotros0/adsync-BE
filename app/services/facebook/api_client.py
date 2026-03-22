@@ -1,5 +1,5 @@
 import httpx
-from typing import Dict, Any
+from typing import Any
 from app.config import get_settings
 from app.utils.exceptions import FacebookAPIError
 
@@ -13,7 +13,7 @@ class APIClient:
         self.access_token = access_token
         self.base_url = f"https://graph.facebook.com/{settings.facebook_api_version}"
     
-    async def get(self, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make GET request to Facebook API"""
         if params is None:
             params = {}

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from app.models.tiktok_session import TikTokSessionModel
@@ -12,13 +12,13 @@ class TikTokSessionRepository(BaseRepository[TikTokSessionModel]):
     def __init__(self, db: Session):
         super().__init__(TikTokSessionModel, db)
 
-    def get_by_session_id(self, session_id: str) -> Optional[TikTokSessionModel]:
+    def get_by_session_id(self, session_id: str) -> TikTokSessionModel | None:
         return self.get_by_field(session_id=session_id)
 
-    def get_by_open_id(self, open_id: str) -> Optional[TikTokSessionModel]:
+    def get_by_open_id(self, open_id: str) -> TikTokSessionModel | None:
         return self.get_by_field(open_id=open_id)
 
-    def get_by_brand_id(self, brand_id: int) -> Optional[TikTokSessionModel]:
+    def get_by_brand_id(self, brand_id: int) -> TikTokSessionModel | None:
         return (
             self.db.query(TikTokSessionModel)
             .filter(
@@ -38,7 +38,7 @@ class TikTokSessionRepository(BaseRepository[TikTokSessionModel]):
         expires_at: datetime,
         refresh_token: str,
         refresh_expires_at: datetime,
-        brand_id: Optional[int] = None,
+        brand_id: int | None = None,
     ) -> TikTokSessionModel:
         session = TikTokSessionModel(
             session_id=session_id,

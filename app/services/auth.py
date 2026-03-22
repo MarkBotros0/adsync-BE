@@ -4,7 +4,6 @@ Handles OAuth 2.0 flow for Facebook
 """
 import httpx
 import secrets
-from typing import Optional, Dict
 from app.config import get_settings
 
 settings = get_settings()
@@ -20,7 +19,7 @@ class FacebookAuthService:
         self.base_url = f"https://graph.facebook.com/{settings.facebook_api_version}"
         self.oauth_base_url = f"https://www.facebook.com/{settings.facebook_api_version}/dialog/oauth"
         
-    def get_login_url(self, state: Optional[str] = None) -> Dict[str, str]:
+    def get_login_url(self, state: str | None = None) -> dict[str, str]:
         """
         Generate Facebook OAuth login URL
         
@@ -60,7 +59,7 @@ class FacebookAuthService:
             "state": state
         }
     
-    async def exchange_code_for_token(self, code: str) -> Dict:
+    async def exchange_code_for_token(self, code: str) -> dict:
         """
         Exchange authorization code for access token
         
@@ -86,7 +85,7 @@ class FacebookAuthService:
             
             return response.json()
     
-    async def get_long_lived_token(self, short_lived_token: str) -> Dict:
+    async def get_long_lived_token(self, short_lived_token: str) -> dict:
         """
         Exchange short-lived token for long-lived token
         
@@ -112,7 +111,7 @@ class FacebookAuthService:
             
             return response.json()
     
-    async def get_user_info(self, access_token: str) -> Dict:
+    async def get_user_info(self, access_token: str) -> dict:
         """
         Get user information from Facebook
         
@@ -136,7 +135,7 @@ class FacebookAuthService:
             
             return response.json()
     
-    async def get_ad_accounts(self, access_token: str, user_id: str) -> Dict:
+    async def get_ad_accounts(self, access_token: str, user_id: str) -> dict:
         """
         Get user's ad accounts
         
@@ -161,7 +160,7 @@ class FacebookAuthService:
             
             return response.json()
     
-    async def validate_token(self, access_token: str) -> Dict:
+    async def validate_token(self, access_token: str) -> dict:
         """
         Validate an access token and get its metadata
         

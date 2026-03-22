@@ -1,6 +1,6 @@
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from typing import Optional
+from typing import Any
 from app.services.facebook.pages import PagesService
 from app.services.facebook.posts import PostsService
 from app.services.facebook.insights import InsightsService
@@ -11,7 +11,7 @@ from app.utils.facebook.formatters import format_post_insights
 router = APIRouter(prefix="/facebook", tags=["Facebook Pages"])
 
 
-def _get_facebook_session(session_id: str) -> dict:
+def _get_facebook_session(session_id: str) -> dict[str, str]:
     """Look up a Facebook session by ID and return its data dict, or raise 401."""
     db = get_session_local()()
     try:
@@ -29,7 +29,7 @@ def _get_facebook_session(session_id: str) -> dict:
 
 
 @router.get("/pages")
-async def get_pages(session_id: str):
+async def get_pages(session_id: str) -> dict[str, Any]:
     """Get all Facebook Pages the user manages"""
     session = _get_facebook_session(session_id)
     
@@ -50,7 +50,7 @@ async def get_pages(session_id: str):
 
 
 @router.get("/pages/{page_id}/posts")
-async def get_page_posts(page_id: str, session_id: str, limit: int = 25, page_token: Optional[str] = None):
+async def get_page_posts(page_id: str, session_id: str, limit: int = 25, page_token: str | None = None) -> dict[str, Any]:
     """Get posts from a specific Facebook Page with engagement metrics"""
     session = _get_facebook_session(session_id)
     
@@ -109,7 +109,7 @@ async def get_page_posts(page_id: str, session_id: str, limit: int = 25, page_to
 
 
 @router.get("/posts/{post_id}/insights")
-async def get_post_insights(post_id: str, session_id: str, page_token: Optional[str] = None):
+async def get_post_insights(post_id: str, session_id: str, page_token: str | None = None) -> dict[str, Any]:
     """Get insights for a specific Facebook post"""
     session = _get_facebook_session(session_id)
     
@@ -151,11 +151,10 @@ async def get_post_insights(post_id: str, session_id: str, page_token: Optional[
 
 
 @router.get("/pages/{page_id}/insights")
-async def get_page_insights(page_id: str, session_id: str, page_token: Optional[str] = None):
-    """
-    Get basic insights for a Facebook Page
-    
-    Returns basic page information without time period
+async def get_page_insights(page_id: str, session_id: str, page_token: str | None = None) -> dict[str, Any]:
+    """Get basic insights for a Facebook Page.
+
+    Returns basic page information without time period.
     """
     session = _get_facebook_session(session_id)
     
@@ -188,11 +187,10 @@ async def get_page_insights(page_id: str, session_id: str, page_token: Optional[
 
 
 @router.get("/pages/{page_id}/messaging-insights")
-async def get_page_messaging_insights(page_id: str, session_id: str, page_token: Optional[str] = None, days: int = 7):
-    """
-    Get messaging-specific insights for a Facebook Page
-    
-    Returns audience, responsiveness, conversations, and outcomes metrics for messaging
+async def get_page_messaging_insights(page_id: str, session_id: str, page_token: str | None = None, days: int = 7) -> dict[str, Any]:
+    """Get messaging-specific insights for a Facebook Page.
+
+    Returns audience, responsiveness, conversations, and outcomes metrics for messaging.
     """
     session = _get_facebook_session(session_id)
     

@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Any
 from app.services.instagram.api_client import InstagramAPIClient
 
 # Fields fetched for every feed media object
@@ -22,10 +22,10 @@ class InstagramMediaService(InstagramAPIClient):
         self,
         ig_user_id: str,
         limit: int = 25,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        after: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        since: str | None = None,
+        until: str | None = None,
+        after: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch feed media (images, videos, reels, carousels) for an IG User.
 
@@ -36,7 +36,7 @@ class InstagramMediaService(InstagramAPIClient):
             until: Unix timestamp — only return media before this time.
             after: Cursor for the next page.
         """
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "fields": _MEDIA_FIELDS,
             "limit": min(limit, 100),
         }
@@ -49,7 +49,7 @@ class InstagramMediaService(InstagramAPIClient):
 
         return await self.get(f"{ig_user_id}/media", params=params)
 
-    async def fetch_stories(self, ig_user_id: str) -> Dict[str, Any]:
+    async def fetch_stories(self, ig_user_id: str) -> dict[str, Any]:
         """
         Fetch currently active stories for an IG User (24-hour window only).
         """
@@ -58,7 +58,7 @@ class InstagramMediaService(InstagramAPIClient):
             params={"fields": _STORY_FIELDS},
         )
 
-    async def fetch_single_media(self, media_id: str) -> Dict[str, Any]:
+    async def fetch_single_media(self, media_id: str) -> dict[str, Any]:
         """Fetch a single IG Media object with full metadata."""
         return await self.get(
             media_id,
@@ -67,7 +67,7 @@ class InstagramMediaService(InstagramAPIClient):
 
     async def fetch_media_comments(
         self, media_id: str, limit: int = 50
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch top-level comments on an IG Media object.
         Returns up to 50 comments (API maximum) in reverse-chronological order.
@@ -81,14 +81,14 @@ class InstagramMediaService(InstagramAPIClient):
         )
 
     async def fetch_tagged_media(
-        self, ig_user_id: str, limit: int = 25, after: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, ig_user_id: str, limit: int = 25, after: str | None = None
+    ) -> dict[str, Any]:
         """
         Fetch IG Media objects where the account has been tagged by other users.
         Uses the /tags edge on the IG User node.
         Requires: instagram_business_basic + instagram_manage_comments permissions.
         """
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "fields": _MEDIA_FIELDS,
             "limit": min(limit, 100),
         }
@@ -96,7 +96,7 @@ class InstagramMediaService(InstagramAPIClient):
             params["after"] = after
         return await self.get(f"{ig_user_id}/tags", params=params)
 
-    async def fetch_carousel_children(self, media_id: str) -> Dict[str, Any]:
+    async def fetch_carousel_children(self, media_id: str) -> dict[str, Any]:
         """
         Fetch child media objects for a CAROUSEL_ALBUM.
         Returns an empty data list for non-carousel media.
@@ -110,10 +110,10 @@ class InstagramMediaService(InstagramAPIClient):
         self,
         ig_user_id: str,
         limit: int = 25,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        after: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        since: str | None = None,
+        until: str | None = None,
+        after: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch Reels exclusively for an IG User.
 
@@ -129,7 +129,7 @@ class InstagramMediaService(InstagramAPIClient):
         """
         # Fetch more than requested so filtering doesn't leave us short
         fetch_limit = min(limit * 3, 100)
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "fields": _MEDIA_FIELDS,
             "limit": fetch_limit,
         }
@@ -148,7 +148,7 @@ class InstagramMediaService(InstagramAPIClient):
         raw["data"] = reels[:limit]
         return raw
 
-    def format_media_list(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    def format_media_list(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Normalise raw /media response into a clean structure."""
         items = raw_data.get("data", [])
         formatted = []

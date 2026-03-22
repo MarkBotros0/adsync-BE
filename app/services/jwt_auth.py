@@ -10,7 +10,6 @@ Validation checks BOTH the signature/expiry AND that the session_key in the
 token matches the one currently stored in the database.
 """
 from datetime import datetime, timedelta
-from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -38,7 +37,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 # Token helpers
 # ──────────────────────────────────────────────
 
-def create_access_token(brand_id: int, session_key: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(brand_id: int, session_key: str, expires_delta: timedelta | None = None) -> str:
     """Create a signed JWT for a brand account."""
     expire = datetime.utcnow() + (expires_delta or timedelta(hours=settings.jwt_access_token_expire_hours))
     payload = {
@@ -59,7 +58,7 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
 
 
-def get_brand_id_from_token(token: str) -> Optional[int]:
+def get_brand_id_from_token(token: str) -> int | None:
     """Return brand_id from token, or None if invalid/expired."""
     try:
         payload = decode_token(token)
@@ -68,7 +67,7 @@ def get_brand_id_from_token(token: str) -> Optional[int]:
         return None
 
 
-def get_session_key_from_token(token: str) -> Optional[str]:
+def get_session_key_from_token(token: str) -> str | None:
     """Return the session_key embedded in the token, or None if invalid."""
     try:
         payload = decode_token(token)

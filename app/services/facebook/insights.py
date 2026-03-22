@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Any
 from datetime import datetime, timedelta
 from app.services.facebook.api_client import APIClient
 from app.utils.exceptions import FacebookAPIError
@@ -7,7 +7,7 @@ from app.utils.exceptions import FacebookAPIError
 class InsightsService(APIClient):
     """Service for Facebook Page Insights operations"""
     
-    async def fetch_page_insights(self, page_id: str, metrics: List[str] = None, period: str = "day", since: str = None, until: str = None) -> Dict[str, Any]:
+    async def fetch_page_insights(self, page_id: str, metrics: list[str] | None = None, period: str = "day", since: str | None = None, until: str | None = None) -> dict[str, Any]:
         """
         Fetch page insights/analytics
         
@@ -59,7 +59,7 @@ class InsightsService(APIClient):
                 "error": str(e)
             }
     
-    async def fetch_page_conversations_insights(self, page_id: str, since: str = None, until: str = None) -> Dict[str, Any]:
+    async def fetch_page_conversations_insights(self, page_id: str, since: str = None, until: str = None) -> dict[str, Any]:
         """
         Fetch messaging/conversation insights
         
@@ -98,7 +98,7 @@ class InsightsService(APIClient):
                 "error": str(e)
             }
     
-    async def fetch_page_responsiveness_insights(self, page_id: str) -> Dict[str, Any]:
+    async def fetch_page_responsiveness_insights(self, page_id: str) -> dict[str, Any]:
         """
         Fetch page responsiveness metrics
         
@@ -124,7 +124,7 @@ class InsightsService(APIClient):
                 "error": str(e)
             }
     
-    async def fetch_page_basic_info(self, page_id: str) -> Dict[str, Any]:
+    async def fetch_page_basic_info(self, page_id: str) -> dict[str, Any]:
         """
         Fetch basic page information without time-based metrics
         
@@ -160,7 +160,7 @@ class InsightsService(APIClient):
         except Exception as e:
             raise FacebookAPIError(f"Failed to fetch page info: {str(e)}")
     
-    async def fetch_messaging_insights(self, page_id: str, days: int = 7) -> Dict[str, Any]:
+    async def fetch_messaging_insights(self, page_id: str, days: int = 7) -> dict[str, Any]:
         """
         Fetch messaging-specific insights for the dashboard
         
@@ -219,7 +219,7 @@ class InsightsService(APIClient):
         except Exception as e:
             raise FacebookAPIError(f"Failed to fetch messaging insights: {str(e)}")
     
-    async def fetch_page_basic_insights(self, page_id: str) -> Dict[str, Any]:
+    async def fetch_page_basic_insights(self, page_id: str) -> dict[str, Any]:
         """
         Fetch basic page information and insights without time period
         
@@ -315,7 +315,7 @@ class InsightsService(APIClient):
         except Exception as e:
             raise FacebookAPIError(f"Failed to fetch comprehensive insights: {str(e)}")
     
-    def _format_audience_metrics_simple(self, page_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_audience_metrics_simple(self, page_info: dict[str, Any]) -> dict[str, Any]:
         """Format audience metrics for messaging insights using only page info"""
         return {
             "total_contacts": page_info.get("fan_count", 0),
@@ -325,7 +325,7 @@ class InsightsService(APIClient):
             "contacts_with_orders": 0,  # Not available via API
         }
     
-    def _format_page_metrics(self, metrics_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_page_metrics(self, metrics_data: dict[str, Any]) -> dict[str, Any]:
         """Format general page metrics for display"""
         data = metrics_data.get("data", [])
         
@@ -352,7 +352,7 @@ class InsightsService(APIClient):
         
         return result
     
-    def _format_audience_metrics(self, metrics_data: Dict[str, Any], page_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_audience_metrics(self, metrics_data: dict[str, Any], page_info: dict[str, Any]) -> dict[str, Any]:
         """Format audience metrics for display"""
         data = metrics_data.get("data", [])
         
@@ -383,7 +383,7 @@ class InsightsService(APIClient):
         
         return result
     
-    def _format_responsiveness_metrics(self, messaging_data: Dict[str, Any], responsiveness_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_responsiveness_metrics(self, messaging_data: dict[str, Any], responsiveness_data: dict[str, Any]) -> dict[str, Any]:
         """Format responsiveness metrics for display"""
         result = {
             "response_rate": "--",
@@ -397,7 +397,7 @@ class InsightsService(APIClient):
         
         return result
     
-    def _format_conversations_metrics(self, messaging_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_conversations_metrics(self, messaging_data: dict[str, Any]) -> dict[str, Any]:
         """Format conversation metrics for display"""
         data = messaging_data.get("data", [])
         
@@ -418,7 +418,7 @@ class InsightsService(APIClient):
         
         return result
     
-    def _format_outcomes_metrics(self, messaging_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_outcomes_metrics(self, messaging_data: dict[str, Any]) -> dict[str, Any]:
         """Format outcomes metrics for display"""
         data = messaging_data.get("data", [])
         
@@ -440,7 +440,7 @@ class InsightsService(APIClient):
         
         return result
     
-    def _format_messaging_metrics(self, metrics_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_messaging_metrics(self, metrics_data: dict[str, Any]) -> dict[str, Any]:
         """
         Legacy method for backward compatibility
         Format messaging metrics for display
@@ -469,7 +469,7 @@ class InsightsService(APIClient):
         
         return result
     
-    async def fetch_page_posts_insights_batch(self, page_id: str, limit: int = 25) -> Dict[str, Any]:
+    async def fetch_page_posts_insights_batch(self, page_id: str, limit: int = 25) -> dict[str, Any]:
         """Fetch posts with their insights in batch"""
         try:
             # Get recent posts

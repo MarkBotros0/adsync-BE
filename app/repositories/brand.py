@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.brand import BrandModel
@@ -12,10 +12,10 @@ class BrandRepository(BaseRepository[BrandModel]):
     def __init__(self, db: Session):
         super().__init__(BrandModel, db)
 
-    def get_by_email(self, email: str) -> Optional[BrandModel]:
+    def get_by_email(self, email: str) -> BrandModel | None:
         return self.get_by_field(email=email)
 
-    def get_by_id(self, brand_id: int) -> Optional[BrandModel]:
+    def get_by_id(self, brand_id: int) -> BrandModel | None:
         return self.get(brand_id)
 
     def create_brand(
@@ -23,10 +23,10 @@ class BrandRepository(BaseRepository[BrandModel]):
         name: str,
         email: str,
         hashed_password: str,
-        subscription_id: Optional[int] = None,
-        logo_url: Optional[str] = None,
-        website: Optional[str] = None,
-        industry: Optional[str] = None,
+        subscription_id: int | None = None,
+        logo_url: str | None = None,
+        website: str | None = None,
+        industry: str | None = None,
     ) -> BrandModel:
         brand = BrandModel(
             name=name,

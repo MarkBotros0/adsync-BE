@@ -1,6 +1,5 @@
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from typing import Optional
 from app.services.facebook.ads import AdsService
 from app.repositories.facebook_session import FacebookSessionRepository
 from app.database import get_session_local
@@ -10,7 +9,7 @@ router = APIRouter(prefix="/facebook/insights", tags=["Facebook Ads"])
 
 
 @router.get("/{account_id}")
-async def get_facebook_insights(account_id: str, session_id: Optional[str] = None, token: Optional[str] = None):
+async def get_facebook_insights(account_id: str, session_id: str | None = None, token: str | None = None):
     """Get Facebook ad insights for an account"""
     if session_id:
         db = get_session_local()()

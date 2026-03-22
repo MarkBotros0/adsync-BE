@@ -9,72 +9,33 @@ Endpoints:
   GET  /brands/validate        – lightweight 5-second polling endpoint
 """
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
-from typing import Optional
 
-from app.services.jwt_auth import (
-    hash_password,
-    verify_password,
-    create_access_token,
-    decode_token,
-    get_brand_id_from_token,
-    get_session_key_from_token,
-)
+from app.services.jwt_auth import hash_password, verify_password, create_access_token
 from app.repositories.brand import BrandRepository
 from app.repositories.subscription import SubscriptionRepository
 from app.database import get_session_local
 from app.services.email import send_verification_email, generate_verification_code
-from jose import JWTError
+from app.dependencies import require_brand
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/brands", tags=["Brand Auth"])
-_bearer = HTTPBearer()
 
 
 # ──────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────
 
-def _get_brand_repo():
+def _get_brand_repo() -> BrandRepository:
     SessionLocal = get_session_local()
     db = SessionLocal()
     return BrandRepository(db)
 
 
-def _get_sub_repo():
+def _get_sub_repo() -> SubscriptionRepository:
     SessionLocal = get_session_local()
     db = SessionLocal()
     return SubscriptionRepository(db)
-
-
-def _require_brand(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
-    """FastAPI dependency — validates JWT and session_key, returns brand."""
-    token = credentials.credentials
-    try:
-        payload = decode_token(token)
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    brand_id = int(payload.get("sub", 0))
-    token_session_key = payload.get("session_key")
-
-    repo = _get_brand_repo()
-    try:
-        brand = repo.get_by_id(brand_id)
-        if not brand or not brand.is_active:
-            raise HTTPException(status_code=401, detail="Brand not found or deactivated")
-
-        if brand.session_key != token_session_key:
-            raise HTTPException(status_code=401, detail="Session invalidated — please log in again")
-
-        # Trigger lazy load while the session is still open so that
-        # endpoints can safely access brand.subscription after db.close().
-        _ = brand.subscription
-
-        return brand
-    finally:
-        repo.db.close()
 
 
 # ──────────────────────────────────────────────
@@ -85,10 +46,10 @@ class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    subscription_name: Optional[str] = "free"
-    logo_url: Optional[str] = None
-    website: Optional[str] = None
-    industry: Optional[str] = None
+    subscription_name: str | None = "free"
+    logo_url: str | None = None
+    website: str | None = None
+    industry: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -150,7 +111,7 @@ async def register(body: RegisterRequest):
         sub_repo.db.close()
 
 
-@router.post("/login")
+@router.post("/login", status_code=200)
 async def login(body: LoginRequest):
     """Authenticate a brand and issue a JWT."""
     repo = _get_brand_repo()
@@ -175,13 +136,13 @@ async def login(body: LoginRequest):
 
 
 @router.get("/me")
-async def get_me(brand=Depends(_require_brand)):
+async def get_me(brand=Depends(require_brand)):
     """Return the authenticated brand's profile."""
     return {"success": True, "brand": brand.to_dict()}
 
 
 @router.get("/validate")
-async def validate_session(brand=Depends(_require_brand)):
+async def validate_session(brand=Depends(require_brand)):
     """Lightweight endpoint called every 5 s by the frontend to keep the session alive.
 
     Returns minimal data so the payload stays small.
@@ -194,8 +155,8 @@ async def validate_session(brand=Depends(_require_brand)):
     }
 
 
-@router.post("/send-verification")
-async def send_verification(brand=Depends(_require_brand)):
+@router.post("/send-verification", status_code=200)
+async def send_verification(brand=Depends(require_brand)):
     """Re-send a verification code to the authenticated brand's email."""
     if brand.is_email_verified:
         raise HTTPException(status_code=400, detail="Email already verified")
@@ -213,7 +174,7 @@ async def send_verification(brand=Depends(_require_brand)):
     return {"success": True, "message": "Verification code sent"}
 
 
-@router.post("/verify-email")
+@router.post("/verify-email", status_code=200)
 async def verify_email(body: VerifyEmailRequest):
     """Verify a brand's email using the 6-digit OTP code."""
     repo = _get_brand_repo()
@@ -238,8 +199,8 @@ async def verify_email(body: VerifyEmailRequest):
         repo.db.close()
 
 
-@router.post("/logout")
-async def logout(brand=Depends(_require_brand)):
+@router.post("/logout", status_code=200)
+async def logout(brand=Depends(require_brand)):
     """Soft logout — instructs the client to discard its token.
 
     The token technically stays valid until expiry unless force-signout is used.
@@ -247,8 +208,8 @@ async def logout(brand=Depends(_require_brand)):
     return {"success": True, "message": "Logged out successfully"}
 
 
-@router.post("/force-signout")
-async def force_signout(brand=Depends(_require_brand)):
+@router.post("/force-signout", status_code=200)
+async def force_signout(brand=Depends(require_brand)):
     """Rotate the session key, immediately invalidating ALL previously issued JWTs
     for this brand (including sessions on other devices/browsers).
     """

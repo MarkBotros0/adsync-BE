@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from app.models.instagram_session import InstagramSessionModel
@@ -12,13 +12,13 @@ class InstagramSessionRepository(BaseRepository[InstagramSessionModel]):
     def __init__(self, db: Session):
         super().__init__(InstagramSessionModel, db)
 
-    def get_by_session_id(self, session_id: str) -> Optional[InstagramSessionModel]:
+    def get_by_session_id(self, session_id: str) -> InstagramSessionModel | None:
         return self.get_by_field(session_id=session_id)
 
-    def get_by_ig_user_id(self, ig_user_id: str) -> Optional[InstagramSessionModel]:
+    def get_by_ig_user_id(self, ig_user_id: str) -> InstagramSessionModel | None:
         return self.get_by_field(ig_user_id=ig_user_id)
 
-    def get_by_brand_id(self, brand_id: int) -> Optional[InstagramSessionModel]:
+    def get_by_brand_id(self, brand_id: int) -> InstagramSessionModel | None:
         return (
             self.db.query(InstagramSessionModel)
             .filter(
@@ -36,7 +36,7 @@ class InstagramSessionRepository(BaseRepository[InstagramSessionModel]):
         username: str,
         access_token: str,
         expires_at: datetime,
-        brand_id: Optional[int] = None,
+        brand_id: int | None = None,
     ) -> InstagramSessionModel:
         session = InstagramSessionModel(
             session_id=session_id,

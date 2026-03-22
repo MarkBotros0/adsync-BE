@@ -1,4 +1,4 @@
-from typing import Optional
+
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.facebook_session import FacebookSessionModel
@@ -11,15 +11,15 @@ class FacebookSessionRepository(BaseRepository[FacebookSessionModel]):
     def __init__(self, db: Session):
         super().__init__(FacebookSessionModel, db)
 
-    def get_by_session_id(self, session_id: str) -> Optional[FacebookSessionModel]:
+    def get_by_session_id(self, session_id: str) -> FacebookSessionModel | None:
         """Get session by session_id"""
         return self.get_by_field(session_id=session_id)
 
-    def get_by_user_id(self, user_id: str) -> Optional[FacebookSessionModel]:
+    def get_by_user_id(self, user_id: str) -> FacebookSessionModel | None:
         """Get session by Facebook user_id"""
         return self.get_by_field(user_id=user_id)
 
-    def get_by_brand_id(self, brand_id: int) -> Optional[FacebookSessionModel]:
+    def get_by_brand_id(self, brand_id: int) -> FacebookSessionModel | None:
         """Get the most recent valid session for a brand"""
         from datetime import datetime as _dt
         return (
@@ -31,7 +31,7 @@ class FacebookSessionRepository(BaseRepository[FacebookSessionModel]):
 
     def create_session(self, session_id: str, user_id: str, user_name: str,
                        access_token: str, expires_at: datetime,
-                       brand_id: Optional[int] = None) -> FacebookSessionModel:
+                       brand_id: int | None = None) -> FacebookSessionModel:
         """Create new Facebook session"""
         session = FacebookSessionModel(
             session_id=session_id,
@@ -44,7 +44,7 @@ class FacebookSessionRepository(BaseRepository[FacebookSessionModel]):
         return self.create(session)
 
     def update_token(self, session_id: str, access_token: str,
-                     expires_at: datetime) -> Optional[FacebookSessionModel]:
+                     expires_at: datetime) -> FacebookSessionModel | None:
         """Update session token"""
         session = self.get_by_session_id(session_id)
         if session:

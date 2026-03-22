@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Any
 from datetime import datetime, timedelta
 
 _DEFAULT_TTL = 600  # 10 minutes (OAuth round-trip)
@@ -8,7 +8,7 @@ class MemoryStorage:
     """In-memory key/value store with TTL. Used only for short-lived OAuth state tokens."""
 
     def __init__(self):
-        self._store: Dict[str, Dict[str, Any]] = {}
+        self._store: dict[str, dict[str, Any]] = {}
 
     def set(self, key: str, value: Any, ttl: int = _DEFAULT_TTL) -> None:
         self._store[key] = {
@@ -16,7 +16,7 @@ class MemoryStorage:
             "expires_at": datetime.utcnow() + timedelta(seconds=ttl),
         }
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         entry = self._store.get(key)
         if not entry:
             return None
@@ -35,7 +35,7 @@ class StateStorage:
     def __init__(self):
         self._mem = MemoryStorage()
 
-    def set(self, state: str, brand_id: Optional[int] = None) -> None:
+    def set(self, state: str, brand_id: int | None = None) -> None:
         """Store state with 10-minute TTL."""
         self._mem.set(state, {"brand_id": brand_id})
 

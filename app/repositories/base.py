@@ -1,6 +1,5 @@
-from typing import Generic, TypeVar, Type, Optional, List
+from typing import Generic, TypeVar, Type
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 
 T = TypeVar('T')
 
@@ -12,15 +11,15 @@ class BaseRepository(Generic[T]):
         self.model = model
         self.db = db
     
-    def get(self, id: int) -> Optional[T]:
+    def get(self, id: int) -> T | None:
         """Get single record by ID"""
         return self.db.query(self.model).filter(self.model.id == id).first()
     
-    def get_by_field(self, **kwargs) -> Optional[T]:
+    def get_by_field(self, **kwargs) -> T | None:
         """Get single record by field"""
         return self.db.query(self.model).filter_by(**kwargs).first()
     
-    def get_all(self, skip: int = 0, limit: int = 100) -> List[T]:
+    def get_all(self, skip: int = 0, limit: int = 100) -> list[T]:
         """Get all records with pagination"""
         return self.db.query(self.model).offset(skip).limit(limit).all()
     

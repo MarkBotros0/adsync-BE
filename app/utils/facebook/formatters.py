@@ -1,8 +1,8 @@
-from typing import Dict, Any
+from typing import Any
 import pandas as pd
 
 
-def format_post_insights(post_data: Dict[str, Any]) -> Dict[str, Any]:
+def format_post_insights(post_data: dict[str, Any]) -> dict[str, Any]:
     """Format Facebook post data into structured insights"""
     likes_count = post_data.get('likes', {}).get('summary', {}).get('total_count', 0)
     comments_count = post_data.get('comments', {}).get('summary', {}).get('total_count', 0)
@@ -37,7 +37,7 @@ def format_post_insights(post_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def format_ad_insights(raw_data: list) -> Dict[str, Any]:
+def format_ad_insights(raw_data: list) -> dict[str, Any]:
     """Format Facebook ad insights data with CTR calculations"""
     df = pd.DataFrame(raw_data)
     

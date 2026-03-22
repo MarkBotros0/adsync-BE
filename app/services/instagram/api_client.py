@@ -1,5 +1,5 @@
 import httpx
-from typing import Dict, Any
+from typing import Any
 
 
 class InstagramAPIClient:
@@ -10,7 +10,7 @@ class InstagramAPIClient:
     def __init__(self, access_token: str):
         self.access_token = access_token
 
-    async def get(self, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         if params is None:
             params = {}
         params["access_token"] = self.access_token

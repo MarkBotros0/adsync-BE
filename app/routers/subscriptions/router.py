@@ -5,20 +5,21 @@ Endpoints:
   GET  /subscriptions/{name}   – get a specific plan by name
 """
 from fastapi import APIRouter, HTTPException
+from typing import Any
 from app.repositories.subscription import SubscriptionRepository
 from app.database import get_session_local
 
 router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
 
 
-def _get_repo():
+def _get_repo() -> SubscriptionRepository:
     SessionLocal = get_session_local()
     db = SessionLocal()
     return SubscriptionRepository(db)
 
 
 @router.get("")
-def list_subscriptions():
+def list_subscriptions() -> dict[str, Any]:
     """Return all active subscription plans with their features."""
     repo = _get_repo()
     try:
@@ -32,7 +33,7 @@ def list_subscriptions():
 
 
 @router.get("/{name}")
-def get_subscription(name: str):
+def get_subscription(name: str) -> dict[str, Any]:
     """Return a single subscription plan by name (e.g. free, starter, pro, enterprise)."""
     repo = _get_repo()
     try:

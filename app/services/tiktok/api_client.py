@@ -1,5 +1,5 @@
 import httpx
-from typing import Dict, Any, Optional
+from typing import Any
 
 
 class TikTokAPIClient:
@@ -11,10 +11,10 @@ class TikTokAPIClient:
         self.access_token = access_token
 
     @property
-    def _auth_headers(self) -> Dict[str, str]:
+    def _auth_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.access_token}"}
 
-    async def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """GET request — used for user info."""
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -34,9 +34,9 @@ class TikTokAPIClient:
     async def post(
         self,
         endpoint: str,
-        params: Optional[Dict[str, Any]] = None,
-        body: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        params: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """POST request — used for video list/query endpoints."""
         async with httpx.AsyncClient() as client:
             response = await client.post(

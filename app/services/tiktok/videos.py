@@ -1,7 +1,7 @@
 """
 TikTok video and user info services.
 """
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 from app.services.tiktok.api_client import TikTokAPIClient
 
@@ -21,7 +21,7 @@ _USER_FIELDS = (
 class TikTokVideoService(TikTokAPIClient):
     """Fetch and normalize TikTok video data."""
 
-    async def fetch_user_info(self) -> Dict[str, Any]:
+    async def fetch_user_info(self) -> dict[str, Any]:
         """GET /v2/user/info/ — returns the authenticated user's profile."""
         data = await self.get("user/info/", params={"fields": _USER_FIELDS})
         return data.get("data", {}).get("user", {})
@@ -29,8 +29,8 @@ class TikTokVideoService(TikTokAPIClient):
     async def fetch_videos(
         self,
         max_count: int = 20,
-        cursor: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        cursor: int | None = None,
+    ) -> dict[str, Any]:
         """
         POST /v2/video/list/ — paginated list of the user's public videos.
 
@@ -40,14 +40,14 @@ class TikTokVideoService(TikTokAPIClient):
                     created before this timestamp. Omit to start from the newest.
         """
         max_count = min(max_count, 20)
-        body: Dict[str, Any] = {"max_count": max_count}
+        body: dict[str, Any] = {"max_count": max_count}
         if cursor is not None:
             body["cursor"] = cursor
 
         data = await self.post("video/list/", params={"fields": _VIDEO_FIELDS}, body=body)
         return data.get("data", {})
 
-    async def fetch_videos_by_ids(self, video_ids: List[str]) -> Dict[str, Any]:
+    async def fetch_videos_by_ids(self, video_ids: list[str]) -> dict[str, Any]:
         """
         POST /v2/video/query/ — fetch specific videos by ID (max 20 per request).
         """
@@ -59,7 +59,7 @@ class TikTokVideoService(TikTokAPIClient):
         )
         return data.get("data", {})
 
-    def format_video_list(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    def format_video_list(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Normalize the video list response into a consistent structure."""
         videos = raw_data.get("videos", [])
         has_more = raw_data.get("has_more", False)

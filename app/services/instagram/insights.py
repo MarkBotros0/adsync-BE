@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Any
 from datetime import datetime, timedelta
 from app.services.instagram.api_client import InstagramAPIClient
 
@@ -28,10 +28,10 @@ class InstagramInsightsService(InstagramAPIClient):
         self,
         ig_user_id: str,
         period: str = "day",
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        metrics: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        since: str | None = None,
+        until: str | None = None,
+        metrics: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch time-series account-level metrics.
 
@@ -55,7 +55,7 @@ class InstagramInsightsService(InstagramAPIClient):
                 "email_contacts",
             ]
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "metric": ",".join(metrics),
             "period": period,
         }
@@ -73,7 +73,7 @@ class InstagramInsightsService(InstagramAPIClient):
         self,
         ig_user_id: str,
         days: int = 30,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch a structured analytics summary for the last N days.
 
@@ -118,7 +118,7 @@ class InstagramInsightsService(InstagramAPIClient):
 
     async def _fetch_engagement_totals(
         self, ig_user_id: str, timeframe: str = "last_30_days"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Fetch aggregated engagement totals using the newer metric_type API."""
         try:
             return await self.get(
@@ -132,12 +132,12 @@ class InstagramInsightsService(InstagramAPIClient):
         except Exception as e:
             return {"data": [], "error": str(e)}
 
-    async def fetch_audience_demographics(self, ig_user_id: str) -> Dict[str, Any]:
+    async def fetch_audience_demographics(self, ig_user_id: str) -> dict[str, Any]:
         """
         Fetch lifetime audience demographics:
         gender/age breakdown, top cities, top countries.
         """
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
 
         for metric, period in [
             ("audience_gender_age", "lifetime"),
@@ -163,8 +163,8 @@ class InstagramInsightsService(InstagramAPIClient):
         self,
         media_id: str,
         media_product_type: str = "FEED",
-        media_type: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        media_type: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch insights for a single IG Media object.
 
@@ -200,10 +200,10 @@ class InstagramInsightsService(InstagramAPIClient):
     # ── Formatters ───────────────────────────────────────────────────────────
 
     def _format_media_insights(
-        self, raw: Dict[str, Any], media_product_type: str
-    ) -> Dict[str, Any]:
+        self, raw: dict[str, Any], media_product_type: str
+    ) -> dict[str, Any]:
         data = raw.get("data", [])
-        metrics: Dict[str, int] = {}
+        metrics: dict[str, int] = {}
         for item in data:
             name = item.get("name")
             values = item.get("values", [])
@@ -211,9 +211,9 @@ class InstagramInsightsService(InstagramAPIClient):
                 metrics[name] = values[0].get("value", 0)
         return {"media_product_type": media_product_type, "metrics": metrics}
 
-    def _format_engagement_totals(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_engagement_totals(self, raw: dict[str, Any]) -> dict[str, Any]:
         data = raw.get("data", [])
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "total_interactions": 0,
             "likes": 0,
             "comments": 0,
@@ -229,9 +229,9 @@ class InstagramInsightsService(InstagramAPIClient):
                 result[name] = total_value.get("value", 0)
         return result
 
-    def _format_timeseries(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_timeseries(self, raw: dict[str, Any]) -> dict[str, Any]:
         data = raw.get("data", [])
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         for item in data:
             name = item.get("name")
             values = item.get("values", [])
@@ -241,7 +241,7 @@ class InstagramInsightsService(InstagramAPIClient):
             ]
         return result
 
-    def _format_demographics(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_demographics(self, raw: dict[str, Any]) -> dict[str, Any]:
         return {
             "gender_age": raw.get("audience_gender_age", {}),
             "top_cities": raw.get("audience_city", {}),

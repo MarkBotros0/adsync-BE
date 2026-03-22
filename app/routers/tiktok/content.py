@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -65,7 +64,7 @@ async def get_tiktok_account(session_id: str):
 async def get_tiktok_account_videos(
     session_id: str,
     max_count: int = 20,
-    cursor: Optional[int] = None,
+    cursor: int | None = None,
 ):
     """
     Get the connected TikTok account's public videos (newest first).
@@ -102,7 +101,7 @@ async def get_tiktok_videos(
     open_id: str,
     session_id: str,
     max_count: int = 20,
-    cursor: Optional[int] = None,
+    cursor: int | None = None,
 ):
     """
     Get public videos for a specific TikTok account.
