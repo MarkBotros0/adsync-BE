@@ -371,13 +371,18 @@ async def invite_user(body: InviteRequest, current_user=Depends(require_admin_or
 
     invite_repo = _get_invite_repo()
     try:
+        # For super user (id=0), pass None since they don't exist in DB
+        inviter_id = None if current_user.id == 0 else current_user.id
+        
         invitation = invite_repo.create_invitation(
             email=body.email,
             brand_id=body.brand_id,
             role=body.role,
-            invited_by_user_id=current_user.id,
+            invited_by_user_id=inviter_id,
         )
+        _ = invitation.brand  # Eager load before closing session
         invite_url = f"{settings.app_url}/invite?token={invitation.token}"
+        invitation_dict = invitation.to_dict()
     finally:
         invite_repo.db.close()
 
@@ -391,7 +396,7 @@ async def invite_user(body: InviteRequest, current_user=Depends(require_admin_or
     return {
         "success": True,
         "message": f"Invitation sent to {body.email}",
-        "invitation": invitation.to_dict(),
+        "invitation": invitation_dict,
     }
 
 

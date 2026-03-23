@@ -15,7 +15,7 @@ class InvitationRepository(BaseRepository[InvitationModel]):
         email: str,
         brand_id: int,
         role: str,
-        invited_by_user_id: int,
+        invited_by_user_id: int | None,
         expires_hours: int = 24,
     ) -> InvitationModel:
         expires_at = datetime.utcnow() + timedelta(hours=expires_hours)

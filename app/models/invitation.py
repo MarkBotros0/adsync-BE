@@ -24,7 +24,7 @@ class InvitationModel(Base):
     role = Column(String, nullable=False, default="NORMAL")
     token = Column(String, unique=True, nullable=False, index=True, default=_new_token)
     expires_at = Column(DateTime, nullable=False)
-    invited_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    invited_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     accepted_at = Column(DateTime, nullable=True, default=None)
 
     brand = relationship("BrandModel", lazy="select")
