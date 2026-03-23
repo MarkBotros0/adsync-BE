@@ -1,8 +1,9 @@
 import secrets
 from datetime import datetime, timedelta
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.user import UserRole
 
 
 def _new_token() -> str:
@@ -21,7 +22,7 @@ class InvitationModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), nullable=False, index=True)
-    role = Column(String, nullable=False, default="NORMAL")
+    role = Column(SAEnum(UserRole, name="userrole"), nullable=False, default=UserRole.NORMAL)
     token = Column(String, unique=True, nullable=False, index=True, default=_new_token)
     expires_at = Column(DateTime, nullable=False)
     invited_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

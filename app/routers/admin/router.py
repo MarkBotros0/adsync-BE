@@ -12,7 +12,8 @@ from pydantic import BaseModel
 from app.repositories.brand import BrandRepository
 from app.repositories.user import UserRepository
 from app.database import get_session_local
-from app.dependencies import require_super
+from app.dependencies import require_super, require_admin_or_super
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -85,8 +86,14 @@ async def create_brand(body: CreateBrandRequest, _user=Depends(require_super)):
 
 
 @router.get("/brands/{brand_id}/users")
-async def list_brand_users(brand_id: int, _user=Depends(require_super)):
-    """List all users for a given brand."""
+async def list_brand_users(brand_id: int, current_user=Depends(require_admin_or_super)):
+    """List all users for a given brand.
+
+    SUPER users can query any brand. ADMIN users can only query their own brand.
+    """
+    role = current_user.role.value if isinstance(current_user.role, UserRole) else current_user.role
+    if role == UserRole.ADMIN.value and current_user.brand_id != brand_id:
+        raise HTTPException(status_code=403, detail="Access denied to this brand's users")
     brand_repo = _get_brand_repo()
     user_repo = _get_user_repo()
     try:

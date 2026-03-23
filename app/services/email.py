@@ -78,44 +78,47 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
-    <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,sans-serif;">
+    <body style="margin:0;padding:0;background-color:#0e0e13;font-family:Arial,sans-serif;">
       <div style="max-width:600px;margin:0 auto;padding:20px;">
-        <div style="background-color:#ffffff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+        <div style="background-color:#15151d;border-radius:12px;border:1px solid #28283a;overflow:hidden;">
 
-          <div style="background-color:#1a1a2e;padding:30px;text-align:center;">
-            <h1 style="color:#ffffff;font-size:24px;margin:0 0 5px 0;">{greeting}</h1>
-            <p style="color:#4f8ef7;font-size:14px;margin:0;">Ad Sync Platform</p>
+          <div style="background:linear-gradient(135deg,#1d1d28 0%,#15151d 100%);padding:32px 30px;text-align:center;border-bottom:1px solid #28283a;">
+            <div style="display:inline-block;background-color:#2d1b4e;border-radius:10px;padding:8px 16px;margin-bottom:16px;">
+              <span style="color:#c084fc;font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;">Ad Sync</span>
+            </div>
+            <h1 style="color:#f1e8ff;font-size:22px;font-weight:700;margin:0 0 6px 0;">{greeting}</h1>
+            <p style="color:#9f7bc0;font-size:13px;margin:0;">Ad Sync Platform</p>
           </div>
 
-          <div style="padding:40px 30px;">
-            <p style="font-size:16px;color:#333333;line-height:1.6;margin:0 0 30px 0;">{intro}</p>
+          <div style="padding:36px 30px;">
+            <p style="font-size:15px;color:#c4b5d9;line-height:1.7;margin:0 0 28px 0;">{intro}</p>
 
-            <div style="background-color:#f8f9fa;border:2px solid #4f8ef7;border-radius:8px;padding:25px;text-align:center;margin:30px 0;">
-              <p style="color:#1a1a2e;font-size:14px;margin:0 0 15px 0;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Your Verification Code</p>
-              <div style="background-color:#ffffff;border:2px dashed #4f8ef7;border-radius:6px;padding:15px;margin:0 auto;display:inline-block;">
-                <p style="font-size:36px;color:#1a1a2e;letter-spacing:8px;font-weight:bold;margin:0;font-family:'Courier New',monospace;">{code}</p>
+            <div style="background-color:#1d1d28;border:1px solid #3d2e5e;border-radius:10px;padding:28px;text-align:center;margin:28px 0;">
+              <p style="color:#9f7bc0;font-size:12px;margin:0 0 14px 0;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;">Your Verification Code</p>
+              <div style="background-color:#0e0e13;border:2px dashed #7c3aed;border-radius:8px;padding:18px 24px;display:inline-block;margin-bottom:14px;">
+                <p style="font-size:38px;color:#e9d5ff;letter-spacing:10px;font-weight:700;margin:0;font-family:'Courier New',monospace;">{code}</p>
               </div>
-              <p style="color:#666666;font-size:13px;margin:15px 0 0 0;">Select and copy the code above</p>
+              <p style="color:#6b5480;font-size:12px;margin:0;">Select and copy the code above</p>
             </div>
 
-            <div style="background-color:#fff3cd;border-left:4px solid #ffc107;padding:15px;border-radius:5px;margin:25px 0;">
-              <p style="font-size:14px;color:#856404;margin:0;">
-                <strong>&#9201; Important:</strong> This code will expire in 15 minutes.
+            <div style="background-color:#1d1d28;border-left:3px solid #a855f7;border-radius:6px;padding:14px 16px;margin:22px 0;">
+              <p style="font-size:13px;color:#c084fc;margin:0;">
+                <strong>&#9201; Important:</strong> <span style="color:#9f7bc0;">This code will expire in 15 minutes.</span>
               </p>
             </div>
 
-            <div style="background-color:#e7f3ff;border-left:4px solid #2196F3;padding:15px;border-radius:5px;margin:25px 0;">
-              <p style="font-size:14px;color:#0d47a1;margin:0 0 8px 0;font-weight:bold;">&#128274; Security Tip</p>
-              <p style="font-size:13px;color:#1565c0;margin:0;line-height:1.5;">{security_tip}</p>
+            <div style="background-color:#1d1d28;border-left:3px solid #6d28d9;border-radius:6px;padding:14px 16px;margin:22px 0;">
+              <p style="font-size:13px;color:#c084fc;margin:0 0 6px 0;font-weight:600;">&#128274; Security Tip</p>
+              <p style="font-size:13px;color:#9f7bc0;margin:0;line-height:1.6;">{security_tip}</p>
             </div>
 
-            <p style="font-size:14px;color:#666666;line-height:1.6;margin:30px 0 0 0;text-align:center;">
+            <p style="font-size:13px;color:#6b5480;line-height:1.6;margin:28px 0 0 0;text-align:center;">
               Need help? Contact our support team anytime.
             </p>
           </div>
 
-          <div style="background-color:#f8f9fa;padding:20px;text-align:center;border-top:1px solid #e0e0e0;">
-            <p style="font-size:12px;color:#999999;margin:0;">&copy; {datetime.now().year} Ad Sync Platform</p>
+          <div style="background-color:#0e0e13;padding:18px;text-align:center;border-top:1px solid #28283a;">
+            <p style="font-size:12px;color:#4a3a5e;margin:0;">&copy; {datetime.now().year} Ad Sync Platform. All rights reserved.</p>
           </div>
 
         </div>
@@ -139,53 +142,56 @@ async def send_invitation_email(email: str, invite_url: str, brand_name: str, in
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
-    <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,sans-serif;">
+    <body style="margin:0;padding:0;background-color:#0e0e13;font-family:Arial,sans-serif;">
       <div style="max-width:600px;margin:0 auto;padding:20px;">
-        <div style="background-color:#ffffff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+        <div style="background-color:#15151d;border-radius:12px;border:1px solid #28283a;overflow:hidden;">
 
-          <div style="background-color:#1a1a2e;padding:30px;text-align:center;">
-            <h1 style="color:#ffffff;font-size:24px;margin:0 0 5px 0;">You've been invited!</h1>
-            <p style="color:#4f8ef7;font-size:14px;margin:0;">Ad Sync Platform</p>
+          <div style="background:linear-gradient(135deg,#1d1d28 0%,#15151d 100%);padding:32px 30px;text-align:center;border-bottom:1px solid #28283a;">
+            <div style="display:inline-block;background-color:#2d1b4e;border-radius:10px;padding:8px 16px;margin-bottom:16px;">
+              <span style="color:#c084fc;font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;">Ad Sync</span>
+            </div>
+            <h1 style="color:#f1e8ff;font-size:22px;font-weight:700;margin:0 0 6px 0;">You've been invited!</h1>
+            <p style="color:#9f7bc0;font-size:13px;margin:0;">Ad Sync Platform</p>
           </div>
 
-          <div style="padding:40px 30px;">
-            <p style="font-size:16px;color:#333333;line-height:1.6;margin:0 0 20px 0;">
-              <strong>{inviter_name}</strong> has invited you to join <strong>{brand_name}</strong> on Ad Sync.
+          <div style="padding:36px 30px;">
+            <p style="font-size:15px;color:#c4b5d9;line-height:1.7;margin:0 0 16px 0;">
+              <strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to join <strong style="color:#e9d5ff;">{brand_name}</strong> on Ad Sync.
             </p>
-            <p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 30px 0;">
+            <p style="font-size:14px;color:#9f7bc0;line-height:1.7;margin:0 0 32px 0;">
               Click the button below to set your password and access your account.
             </p>
 
-            <div style="text-align:center;margin:35px 0;">
+            <div style="text-align:center;margin:32px 0;">
               <a href="{invite_url}"
-                 style="display:inline-block;background-color:#7c3aed;color:#ffffff;font-size:16px;font-weight:bold;
-                        padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
-                Accept Invitation
+                 style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#ffffff;font-size:15px;font-weight:700;
+                        padding:14px 40px;border-radius:8px;text-decoration:none;letter-spacing:0.4px;box-shadow:0 4px 20px rgba(168,85,247,0.3);">
+                Accept Invitation &rarr;
               </a>
             </div>
 
-            <div style="background-color:#fff3cd;border-left:4px solid #ffc107;padding:15px;border-radius:5px;margin:25px 0;">
-              <p style="font-size:14px;color:#856404;margin:0;">
-                <strong>&#9201; This link expires in 24 hours.</strong>
+            <div style="background-color:#1d1d28;border-left:3px solid #a855f7;border-radius:6px;padding:14px 16px;margin:22px 0;">
+              <p style="font-size:13px;color:#c084fc;margin:0;">
+                <strong>&#9201; Important:</strong> <span style="color:#9f7bc0;">This link expires in 24 hours.</span>
               </p>
             </div>
 
-            <div style="background-color:#e7f3ff;border-left:4px solid #2196F3;padding:15px;border-radius:5px;margin:25px 0;">
-              <p style="font-size:14px;color:#0d47a1;margin:0 0 8px 0;font-weight:bold;">&#128274; Security note</p>
-              <p style="font-size:13px;color:#1565c0;margin:0;line-height:1.5;">
+            <div style="background-color:#1d1d28;border-left:3px solid #6d28d9;border-radius:6px;padding:14px 16px;margin:22px 0;">
+              <p style="font-size:13px;color:#c084fc;margin:0 0 6px 0;font-weight:600;">&#128274; Security Note</p>
+              <p style="font-size:13px;color:#9f7bc0;margin:0;line-height:1.6;">
                 If you did not expect this invitation, you can safely ignore this email.
                 This link can only be used once.
               </p>
             </div>
 
-            <p style="font-size:13px;color:#888888;margin:25px 0 0 0;">
+            <p style="font-size:12px;color:#4a3a5e;margin:24px 0 0 0;line-height:1.6;">
               Or copy this link into your browser:<br>
-              <span style="color:#4f8ef7;word-break:break-all;">{invite_url}</span>
+              <span style="color:#a855f7;word-break:break-all;">{invite_url}</span>
             </p>
           </div>
 
-          <div style="background-color:#f8f9fa;padding:20px;text-align:center;border-top:1px solid #e0e0e0;">
-            <p style="font-size:12px;color:#999999;margin:0;">&copy; {datetime.now().year} Ad Sync Platform</p>
+          <div style="background-color:#0e0e13;padding:18px;text-align:center;border-top:1px solid #28283a;">
+            <p style="font-size:12px;color:#4a3a5e;margin:0;">&copy; {datetime.now().year} Ad Sync Platform. All rights reserved.</p>
           </div>
 
         </div>

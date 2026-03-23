@@ -30,7 +30,7 @@ class UserModel(Base):
     hashed_password = Column(String, nullable=False)
     name = Column(String, nullable=False)
     role = Column(
-        SAEnum(UserRole, values_callable=lambda obj: [e.value for e in obj], native_enum=False),
+        SAEnum(UserRole, name="userrole"),
         nullable=False,
         default=UserRole.NORMAL,
     )
