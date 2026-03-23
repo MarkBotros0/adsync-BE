@@ -241,7 +241,20 @@ def get_brand(email):
 - After adding a new model, generate a migration: `alembic revision --autogenerate -m "describe change"`, then review the output before committing.
 
 ### Model conventions
-- Every model has `created_at` and `updated_at` with Python-side defaults. `updated_at` uses `onupdate=datetime.utcnow`.
+- **Every model must have `created_at`, `updated_at`, and `deleted_at`** with Python-side defaults. `updated_at` uses `onupdate=datetime.utcnow`. `deleted_at` defaults to `None` (nullable).
+- **All entities support soft deletion** — never issue `db.delete(obj)`. Set `deleted_at = datetime.utcnow()` instead. Queries must filter out soft-deleted rows with `.filter(Model.deleted_at.is_(None))`.
+- `BaseRepository` must include a `soft_delete(id)` method and all `get`/`list` queries must exclude soft-deleted rows by default.
+
+```python
+# Standard timestamps on every model
+from datetime import datetime
+from sqlalchemy import Column, DateTime
+
+created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+deleted_at = Column(DateTime, nullable=True, default=None)  # None = active; set to soft-delete
+```
+
 - `session_key` on `BrandModel` is the server-side nonce for JWT invalidation — never expose it in API responses.
 - `to_dict()` must only return fields safe to send to the client. Never include `hashed_password`, `session_key`, or verification codes.
 

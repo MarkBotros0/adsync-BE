@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     gmail_user: str = ""
     gmail_app_password: str = ""
     
+    # Super User Credentials
+    super_user_email: str = ""
+    super_user_password: str = ""
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

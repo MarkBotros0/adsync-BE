@@ -125,3 +125,73 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
     """
 
     return await _send_mail(email, f"Ad Sync - {subject}", html)
+
+
+async def send_invitation_email(email: str, invite_url: str, brand_name: str, inviter_name: str) -> bool:
+    """Send a brand invitation link to a new user.
+
+    The link is valid for 24 hours and expires after first use.
+    """
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,sans-serif;">
+      <div style="max-width:600px;margin:0 auto;padding:20px;">
+        <div style="background-color:#ffffff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+
+          <div style="background-color:#1a1a2e;padding:30px;text-align:center;">
+            <h1 style="color:#ffffff;font-size:24px;margin:0 0 5px 0;">You've been invited!</h1>
+            <p style="color:#4f8ef7;font-size:14px;margin:0;">Ad Sync Platform</p>
+          </div>
+
+          <div style="padding:40px 30px;">
+            <p style="font-size:16px;color:#333333;line-height:1.6;margin:0 0 20px 0;">
+              <strong>{inviter_name}</strong> has invited you to join <strong>{brand_name}</strong> on Ad Sync.
+            </p>
+            <p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 30px 0;">
+              Click the button below to set your password and access your account.
+            </p>
+
+            <div style="text-align:center;margin:35px 0;">
+              <a href="{invite_url}"
+                 style="display:inline-block;background-color:#7c3aed;color:#ffffff;font-size:16px;font-weight:bold;
+                        padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
+                Accept Invitation
+              </a>
+            </div>
+
+            <div style="background-color:#fff3cd;border-left:4px solid #ffc107;padding:15px;border-radius:5px;margin:25px 0;">
+              <p style="font-size:14px;color:#856404;margin:0;">
+                <strong>&#9201; This link expires in 24 hours.</strong>
+              </p>
+            </div>
+
+            <div style="background-color:#e7f3ff;border-left:4px solid #2196F3;padding:15px;border-radius:5px;margin:25px 0;">
+              <p style="font-size:14px;color:#0d47a1;margin:0 0 8px 0;font-weight:bold;">&#128274; Security note</p>
+              <p style="font-size:13px;color:#1565c0;margin:0;line-height:1.5;">
+                If you did not expect this invitation, you can safely ignore this email.
+                This link can only be used once.
+              </p>
+            </div>
+
+            <p style="font-size:13px;color:#888888;margin:25px 0 0 0;">
+              Or copy this link into your browser:<br>
+              <span style="color:#4f8ef7;word-break:break-all;">{invite_url}</span>
+            </p>
+          </div>
+
+          <div style="background-color:#f8f9fa;padding:20px;text-align:center;border-top:1px solid #e0e0e0;">
+            <p style="font-size:12px;color:#999999;margin:0;">&copy; {datetime.now().year} Ad Sync Platform</p>
+          </div>
+
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    return await _send_mail(email, "Ad Sync - You've been invited", html)

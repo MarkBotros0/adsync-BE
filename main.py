@@ -15,6 +15,8 @@ from app.routers.tiktok import auth as tiktok_auth
 from app.routers.tiktok import content as tiktok_content
 from app.routers.brands import auth as brands_auth
 from app.routers.subscriptions import router as subscriptions_router
+from app.routers.content import feed as content_feed
+from app.routers.admin import router as admin_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -107,6 +109,8 @@ app.include_router(tiktok_auth.router)
 app.include_router(tiktok_content.router)
 app.include_router(brands_auth.router)
 app.include_router(subscriptions_router.router)
+app.include_router(content_feed.router)
+app.include_router(admin_router.router)
 
 
 @app.on_event("startup")
@@ -118,6 +122,8 @@ async def on_startup():
     from app.repositories.subscription import SubscriptionRepository
     import app.models.brand              # noqa: ensure ORM model is registered
     import app.models.subscription       # noqa: ensure ORM model is registered
+    import app.models.user               # noqa: ensure ORM model is registered
+    import app.models.invitation         # noqa: ensure ORM model is registered
     import app.models.instagram_session  # noqa: ensure ORM model is registered
     import app.models.tiktok_session     # noqa: ensure ORM model is registered
 
@@ -130,14 +136,17 @@ async def on_startup():
         logger.error("Check DATABASE_URL in .env and ensure the database is reachable.")
         raise  # re-raise so the server doesn't start in a broken state
 
-    # Run Alembic migrations
-    try:
-        logger.info("Running Alembic migrations…")
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Migrations complete")
-    except Exception as exc:
-        logger.warning("Migration step skipped: %s", exc)
+    # Run Alembic migrations - DISABLED (run manually with: alembic upgrade head)
+    # try:
+    #     logger.info("Running Alembic migrations…")
+    #     alembic_cfg = Config("alembic.ini")
+    #     alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
+    #     command.upgrade(alembic_cfg, "head")
+    #     logger.info("Migrations complete")
+    # except Exception as exc:
+    #     logger.warning("Migration step failed or timed out: %s", exc)
+    #     logger.warning("Continuing server startup anyway...")
+    logger.info("Skipping automatic migrations - run 'alembic upgrade head' manually if needed")
 
     # Seed subscription plans
     try:
