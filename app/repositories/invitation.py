@@ -43,6 +43,41 @@ class InvitationRepository(BaseRepository[InvitationModel]):
         invitation.updated_at = datetime.utcnow()
         return self.update(invitation)
 
+    def get_all_pending(self) -> list[InvitationModel]:
+        return (
+            self.db.query(InvitationModel)
+            .filter(
+                InvitationModel.accepted_at.is_(None),
+                InvitationModel.expires_at > datetime.utcnow(),
+                InvitationModel.deleted_at.is_(None),
+            )
+            .order_by(InvitationModel.created_at.desc())
+            .all()
+        )
+
+    def get_all_invitations(self) -> list[InvitationModel]:
+        """Return all non-deleted invitations across all brands (for SUPER view)."""
+        return (
+            self.db.query(InvitationModel)
+            .filter(InvitationModel.deleted_at.is_(None))
+            .order_by(InvitationModel.created_at.desc())
+            .all()
+        )
+
+    def get_pending_by_email_and_brand(self, email: str, brand_id: int) -> InvitationModel | None:
+        """Return an active (non-expired, non-accepted) invitation for this email+brand pair."""
+        return (
+            self.db.query(InvitationModel)
+            .filter(
+                InvitationModel.email == email,
+                InvitationModel.brand_id == brand_id,
+                InvitationModel.accepted_at.is_(None),
+                InvitationModel.expires_at > datetime.utcnow(),
+                InvitationModel.deleted_at.is_(None),
+            )
+            .first()
+        )
+
     def get_pending_by_brand(self, brand_id: int) -> list[InvitationModel]:
         return (
             self.db.query(InvitationModel)

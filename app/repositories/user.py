@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.user import UserModel, UserRole
+from app.models.user_brand import UserBrandModel
 from app.repositories.base import BaseRepository
 
 
@@ -22,9 +23,15 @@ class UserRepository(BaseRepository[UserModel]):
         return self.get(user_id)
 
     def get_by_brand(self, brand_id: int) -> list[UserModel]:
+        """Return all active users that have a membership in the given brand."""
         return (
             self.db.query(UserModel)
-            .filter(UserModel.brand_id == brand_id, UserModel.deleted_at.is_(None))
+            .join(UserBrandModel, UserBrandModel.user_id == UserModel.id)
+            .filter(
+                UserBrandModel.brand_id == brand_id,
+                UserBrandModel.deleted_at.is_(None),
+                UserModel.deleted_at.is_(None),
+            )
             .order_by(UserModel.created_at)
             .all()
         )
@@ -44,14 +51,13 @@ class UserRepository(BaseRepository[UserModel]):
         email: str,
         hashed_password: str,
         name: str,
-        brand_id: int,
         role: UserRole = UserRole.NORMAL,
     ) -> UserModel:
+        """Create a user record. Use UserBrandRepository.create_membership to link to brands."""
         user = UserModel(
             email=email,
             hashed_password=hashed_password,
             name=name,
-            brand_id=brand_id,
             role=role,
             session_key=str(uuid.uuid4()),
         )

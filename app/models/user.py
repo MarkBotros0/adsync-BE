@@ -1,14 +1,14 @@
 import uuid
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from app.database import Base
 
 
 class UserRole(str, enum.Enum):
     SUPER = "SUPER"
-    ADMIN = "ADMIN"
+    ADMIN = "ADMIN"   # kept in enum for DB backwards-compat; no longer assigned to new users
     NORMAL = "NORMAL"
 
 
@@ -19,8 +19,9 @@ def _new_session_key() -> str:
 class UserModel(Base):
     """User account.
 
-    Each user belongs to exactly one brand.
-    Multiple users can share the same brand portal.
+    A user can belong to multiple brands via the UserBrandModel junction table.
+    The global role on this model is used only for SUPER (platform-wide override).
+    Brand-specific roles (ADMIN / NORMAL) live in UserBrandModel.role.
     """
 
     __tablename__ = "users"
@@ -35,8 +36,11 @@ class UserModel(Base):
         default=UserRole.NORMAL,
     )
 
-    brand_id = Column(Integer, ForeignKey("brands.id"), nullable=False, index=True)
-    brand = relationship("BrandModel", lazy="select")
+    # brand_memberships populated by UserBrandModel.user back-populates
+    brand_memberships = relationship("UserBrandModel", back_populates="user", lazy="select")
+
+    # Transient: set by _validate_user_and_brand so downstream code can read .brand
+    brand = None
 
     is_active = Column(Boolean, default=True, nullable=False)
 
@@ -59,7 +63,6 @@ class UserModel(Base):
             "email": self.email,
             "name": self.name,
             "role": self.role.value if isinstance(self.role, UserRole) else self.role,
-            "brand_id": self.brand_id,
             "brand": self.brand.to_dict() if self.brand else None,
             "is_active": self.is_active,
             "is_email_verified": self.is_email_verified,

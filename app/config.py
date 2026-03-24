@@ -3,9 +3,12 @@ Application configuration module
 Load environment variables and provide settings
 """
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
+
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):

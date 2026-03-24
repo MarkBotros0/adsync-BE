@@ -26,6 +26,7 @@ class InstagramSessionModel(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True, default=None)
 
     def __repr__(self) -> str:
         return f"<InstagramSession {self.session_id}>"

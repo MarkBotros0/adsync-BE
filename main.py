@@ -123,6 +123,7 @@ async def on_startup():
     import app.models.brand              # noqa: ensure ORM model is registered
     import app.models.subscription       # noqa: ensure ORM model is registered
     import app.models.user               # noqa: ensure ORM model is registered
+    import app.models.user_brand         # noqa: ensure ORM model is registered
     import app.models.invitation         # noqa: ensure ORM model is registered
     import app.models.instagram_session  # noqa: ensure ORM model is registered
     import app.models.tiktok_session     # noqa: ensure ORM model is registered

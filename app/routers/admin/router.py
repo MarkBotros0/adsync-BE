@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.repositories.brand import BrandRepository
 from app.repositories.user import UserRepository
+from app.repositories.invitation import InvitationRepository
 from app.database import get_session_local
 from app.dependencies import require_super, require_admin_or_super
 from app.models.user import UserRole
@@ -28,6 +29,11 @@ def _get_brand_repo() -> BrandRepository:
     return BrandRepository(db)
 
 
+def _get_invite_repo() -> InvitationRepository:
+    db = get_session_local()()
+    return InvitationRepository(db)
+
+
 class CreateBrandRequest(BaseModel):
     name: str
     website: str | None = None
@@ -37,15 +43,28 @@ class CreateBrandRequest(BaseModel):
 
 @router.get("/users")
 async def list_all_users(_user=Depends(require_super)):
-    """Return all users across all brands with their brand info."""
+    """Return all users across all brands with their brand memberships."""
+    from app.repositories.user_brand import UserBrandRepository
     repo = _get_user_repo()
     try:
         users = repo.get_all_users()
         result = []
         for u in users:
-            brand = u.brand  # lazy-load while session open
-            _ = brand.subscription if brand else None
-            result.append(u.to_dict())
+            # Eager-load memberships while session is open
+            memberships = u.brand_memberships
+            brands = []
+            for m in memberships:
+                if m.deleted_at is None:
+                    b = m.brand
+                    if b:
+                        brands.append({
+                            "id": b.id,
+                            "name": b.name,
+                            "role": m.role.value if hasattr(m.role, "value") else m.role,
+                        })
+            user_dict = u.to_dict()
+            user_dict["brands"] = brands
+            result.append(user_dict)
         return {"success": True, "total": len(result), "users": result}
     finally:
         repo.db.close()
@@ -85,6 +104,45 @@ async def create_brand(body: CreateBrandRequest, _user=Depends(require_super)):
         repo.db.close()
 
 
+@router.get("/invitations")
+async def list_all_invitations(_user=Depends(require_super)):
+    """Return all pending invitations across all brands (SUPER only)."""
+    invite_repo = _get_invite_repo()
+    try:
+        invitations = invite_repo.get_all_invitations()
+        for inv in invitations:
+            _ = inv.brand  # eager-load while session open
+        return {
+            "success": True,
+            "total": len(invitations),
+            "invitations": [inv.to_dict() for inv in invitations],
+        }
+    finally:
+        invite_repo.db.close()
+
+
+@router.get("/brands/{brand_id}/invitations")
+async def list_brand_invitations(brand_id: int, current_user=Depends(require_admin_or_super)):
+    """Return pending invitations for a specific brand."""
+    role = current_user.role.value if isinstance(current_user.role, UserRole) else current_user.role
+    current_brand_id = current_user.brand.id if current_user.brand else None
+    if role == UserRole.ADMIN.value and current_brand_id != brand_id:
+        raise HTTPException(status_code=403, detail="Access denied to this brand's invitations")
+
+    invite_repo = _get_invite_repo()
+    try:
+        invitations = invite_repo.get_pending_by_brand(brand_id)
+        for inv in invitations:
+            _ = inv.brand  # eager-load while session open
+        return {
+            "success": True,
+            "total": len(invitations),
+            "invitations": [inv.to_dict() for inv in invitations],
+        }
+    finally:
+        invite_repo.db.close()
+
+
 @router.get("/brands/{brand_id}/users")
 async def list_brand_users(brand_id: int, current_user=Depends(require_admin_or_super)):
     """List all users for a given brand.
@@ -92,7 +150,8 @@ async def list_brand_users(brand_id: int, current_user=Depends(require_admin_or_
     SUPER users can query any brand. ADMIN users can only query their own brand.
     """
     role = current_user.role.value if isinstance(current_user.role, UserRole) else current_user.role
-    if role == UserRole.ADMIN.value and current_user.brand_id != brand_id:
+    current_brand_id = current_user.brand.id if current_user.brand else None
+    if role == UserRole.ADMIN.value and current_brand_id != brand_id:
         raise HTTPException(status_code=403, detail="Access denied to this brand's users")
     brand_repo = _get_brand_repo()
     user_repo = _get_user_repo()

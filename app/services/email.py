@@ -79,7 +79,7 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
     <body style="margin:0;padding:0;background-color:#0e0e13;font-family:Arial,sans-serif;">
-      <div style="max-width:600px;margin:0 auto;padding:20px;">
+      <div style="max-width:600px;margin:0 auto;padding:20px;background-color:#0e0e13;">
         <div style="background-color:#15151d;border-radius:12px;border:1px solid #28283a;overflow:hidden;">
 
           <div style="background:linear-gradient(135deg,#1d1d28 0%,#15151d 100%);padding:32px 30px;text-align:center;border-bottom:1px solid #28283a;">
@@ -90,7 +90,7 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
             <p style="color:#9f7bc0;font-size:13px;margin:0;">Ad Sync Platform</p>
           </div>
 
-          <div style="padding:36px 30px;">
+          <div style="padding:36px 30px;background-color:#15151d;">
             <p style="font-size:15px;color:#c4b5d9;line-height:1.7;margin:0 0 28px 0;">{intro}</p>
 
             <div style="background-color:#1d1d28;border:1px solid #3d2e5e;border-radius:10px;padding:28px;text-align:center;margin:28px 0;">
@@ -154,7 +154,7 @@ async def send_invitation_email(email: str, invite_url: str, brand_name: str, in
             <p style="color:#9f7bc0;font-size:13px;margin:0;">Ad Sync Platform</p>
           </div>
 
-          <div style="padding:36px 30px;">
+          <div style="padding:36px 30px;background-color:#15151d;">
             <p style="font-size:15px;color:#c4b5d9;line-height:1.7;margin:0 0 16px 0;">
               <strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to join <strong style="color:#e9d5ff;">{brand_name}</strong> on Ad Sync.
             </p>

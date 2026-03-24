@@ -6,6 +6,7 @@ from jose import JWTError
 from app.services.jwt_auth import decode_token
 from app.repositories.brand import BrandRepository
 from app.repositories.user import UserRepository
+from app.repositories.user_brand import UserBrandRepository
 from app.models.user import UserRole
 from app.database import get_session_local
 
@@ -14,7 +15,12 @@ bearer_required = HTTPBearer()
 
 
 def _validate_user_and_brand(token: str):
-    """Decode JWT, validate user session + brand. Returns (user, brand) with lazy loads done."""
+    """Decode JWT, validate user session + brand membership. Returns (user, brand).
+
+    For non-SUPER users the user's in-memory .role is overwritten with the
+    brand-specific role from UserBrandModel so that require_admin_or_super
+    works correctly without any changes.
+    """
     try:
         payload = decode_token(token)
     except JWTError:
@@ -34,13 +40,12 @@ def _validate_user_and_brand(token: str):
             name = "Super Admin"
             is_active = True
             subscription = None
-        
+
         virtual_user = UserModel(
             id=0,
             email=payload.get("email", "super@adsync.com"),
             name="Super Admin",
             role=UserRole.SUPER,
-            brand_id=0,
             session_key=token_session_key,
             is_active=True,
             is_email_verified=True,
@@ -63,6 +68,18 @@ def _validate_user_and_brand(token: str):
             raise HTTPException(status_code=401, detail="Brand not found or deactivated")
 
         _ = brand.subscription
+
+        # SUPER users bypass brand membership checks
+        user_role = user.role.value if isinstance(user.role, UserRole) else user.role
+        if user_role != UserRole.SUPER.value:
+            ub_repo = UserBrandRepository(db)
+            membership = ub_repo.get_membership(user_id, brand_id)
+            if not membership:
+                raise HTTPException(status_code=401, detail="Access to this brand is not permitted")
+            # Overwrite the in-memory role with the brand-specific role so that
+            # require_admin_or_super sees the correct value for this brand context.
+            user.role = membership.role  # type: ignore[assignment]
+
         user.brand = brand
         return user, brand
     finally:

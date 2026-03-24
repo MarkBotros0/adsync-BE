@@ -17,6 +17,7 @@ class FacebookSessionModel(Base):
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True, default=None)
 
     def __repr__(self):
         return f"<FacebookSession {self.session_id}>"
