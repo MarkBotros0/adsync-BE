@@ -76,8 +76,6 @@ async def list_all_brands(_user=Depends(require_super)):
     repo = _get_brand_repo()
     try:
         brands = repo.get_all_brands()
-        for b in brands:
-            _ = b.subscription  # eager-load while session open
         return {
             "success": True,
             "total": len(brands),
@@ -98,7 +96,6 @@ async def create_brand(body: CreateBrandRequest, _user=Depends(require_super)):
             industry=body.industry,
             logo_url=body.logo_url,
         )
-        _ = brand.subscription
         return {"success": True, "brand": brand.to_dict()}
     finally:
         repo.db.close()

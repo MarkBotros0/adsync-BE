@@ -384,7 +384,6 @@ async def login(body: LoginRequest):
             brand = membership.brand
             if not brand or not brand.is_active:
                 raise HTTPException(status_code=403, detail="Brand account is deactivated")
-            _ = brand.subscription
 
             org_id = brand.organization_id or 0
             token = create_access_token(
@@ -455,7 +454,6 @@ async def select_brand(body: SelectBrandRequest):
         brand = brand_repo.get_by_id(body.brand_id)
         if not brand or not brand.is_active:
             raise HTTPException(status_code=404, detail="Brand not found")
-        _ = brand.subscription
 
         org_id = brand.organization_id or 0
 
@@ -502,7 +500,6 @@ async def switch_brand(body: SwitchBrandRequest, current_user=Depends(require_us
         brand = brand_repo.get_by_id(body.brand_id)
         if not brand or not brand.is_active:
             raise HTTPException(status_code=404, detail="Brand not found")
-        _ = brand.subscription
 
         user_role = _role_value(current_user)
         org_id = brand.organization_id or getattr(current_user, "org_id", 0)
@@ -553,8 +550,6 @@ async def my_brands(current_user=Depends(require_user)):
     try:
         if user_role == UserRole.SUPER.value:
             brands = brand_repo.get_all_brands()
-            for b in brands:
-                _ = b.subscription
             return {
                 "success": True,
                 "brands": [
@@ -565,8 +560,6 @@ async def my_brands(current_user=Depends(require_user)):
 
         if user_role == UserRole.ORG_ADMIN.value:
             brands = brand_repo.get_brands_for_org(org_id)
-            for b in brands:
-                _ = b.subscription
             return {
                 "success": True,
                 "brands": [
@@ -994,7 +987,6 @@ async def accept_invitation(body: AcceptInviteRequest):
         brand = brand_repo.get_by_id(invitation.brand_id)
         if not brand or not brand.is_active:
             raise HTTPException(status_code=404, detail="Brand not found")
-        _ = brand.subscription
 
         org_id = brand.organization_id or 0
 

@@ -122,7 +122,6 @@ async def create_brand(body: CreateBrandRequest, current_user=Depends(require_or
             website=body.website,
             industry=body.industry,
         )
-        _ = brand.subscription
         return {"success": True, "brand": brand.to_dict()}
     finally:
         org_repo.db.close()
@@ -136,8 +135,6 @@ async def list_brands(current_user=Depends(require_org_admin)):
     brand_repo = _get_brand_repo()
     try:
         brands = brand_repo.get_brands_for_org(org_id)
-        for b in brands:
-            _ = b.subscription
         return {
             "success": True,
             "total": len(brands),
@@ -171,7 +168,6 @@ async def update_brand(brand_id: int, body: UpdateBrandRequest, current_user=Dep
             brand.industry = body.industry
         brand.updated_at = datetime.utcnow()
         brand_repo.update(brand)
-        _ = brand.subscription
         return {"success": True, "brand": brand.to_dict()}
     finally:
         brand_repo.db.close()
