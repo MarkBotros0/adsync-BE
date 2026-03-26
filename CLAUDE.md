@@ -9,6 +9,82 @@ App package: `app/`
 
 ---
 
+## Architecture — Multi-Tenant Organization Model
+
+### Entity Hierarchy
+
+```
+SUPER (app-level admin, internal staff only — not in DB, config-based)
+└── Organization  (the marketing agency — top-level tenant)
+      ├── has one Subscription  (brand limit + feature flags live here)
+      ├── has many ORG_ADMINs   (via organization_memberships table)
+      └── has many Brands
+            └── has many NORMAL members (via user_brands table)
+```
+
+### Data Model
+
+| Table | Purpose |
+|---|---|
+| `organizations` | Top-level tenant (agency). Owns the subscription and all brands. |
+| `organization_memberships` | Links users to an org with `ORG_ADMIN` role. Org admins see all brands. |
+| `brands` | Workspace within an org. Has `organization_id` FK. |
+| `user_brands` | Links NORMAL users to specific brands. Org admins do NOT get rows here — their org membership grants access to all brands. |
+| `subscriptions` | Subscription plan with feature limits. Belongs to `organizations`, not `brands`. |
+| `invitations` | Brand-scoped invite. Has `brand_id` and `organization_id`. |
+
+### User Roles
+
+| Role | Stored in | Access |
+|---|---|---|
+| `SUPER` | `users.role` (config-based, id=0) | Everything across all orgs |
+| `ORG_ADMIN` | `organization_memberships.role` | All brands in their org, manage users, create brands |
+| `NORMAL` | `user_brands` membership exists | Only brands they are explicitly invited to |
+
+### Brand Access Check (used in dependencies.py)
+
+```python
+def can_access_brand(user, brand):
+    if user.role == "SUPER":          return True   # app admin
+    if is_org_admin(user, brand.org_id): return True   # sees all org brands
+    if has_brand_membership(user, brand.id): return True  # explicit invite
+    return False
+```
+
+### Registration Flow
+
+`POST /auth/register` — creates an **Organization** + first **ORG_ADMIN** user. No brand is created automatically; the admin creates brands after signup.
+
+### JWT Payload
+
+```json
+{
+  "sub": "user_id",
+  "org_id": "organization_id",
+  "brand_id": "currently_active_brand_id",
+  "role": "ORG_ADMIN | NORMAL | SUPER",
+  "session_key": "...",
+  "exp": "..."
+}
+```
+
+### Brand Switcher
+
+- **ORG_ADMIN**: brand switcher shows all brands in the org.
+- **NORMAL**: brand switcher shows only brands they have a `user_brands` row for.
+- Switching brand re-issues a JWT with the new `brand_id` via `POST /auth/switch-brand`.
+
+### Subscription Limits
+
+`max_brands` lives on `Organization.subscription.features`. Enforced when creating a brand:
+```python
+current_brand_count = brand_repo.count_active_brands(org_id)
+if current_brand_count >= subscription.features["max_brands"]:
+    raise HTTPException(403, "Brand limit reached for your subscription")
+```
+
+---
+
 ## Documentation Reference
 
 **Always consult the `Docs/` folder before implementing or modifying any platform integration.**
@@ -225,7 +301,43 @@ def get_brand(email):
 2. `alembic upgrade head` — applies pending migrations. Wrapped in `try/except` so a migration warning (e.g. column already exists) never crashes the server.
 3. `SubscriptionRepository.seed_defaults()` — upserts the default subscription plans.
 
+### Running migrations
+
+```bash
+# Apply all pending migrations (run from ad-sync-py/)
+alembic upgrade head
+```
+
+The server startup hook also runs `alembic upgrade head` automatically on every start, so a manual run is only needed when testing schema changes before starting the server.
+
 ### Writing migrations
+
+**File naming**: create manually in `alembic/versions/` with a descriptive name:
+```
+alembic/versions/<short_hash>_<describe_change>.py
+```
+Set `down_revision` to the revision ID of the previous migration (the last file in the folder).
+
+**Minimal migration template**:
+```python
+from alembic import op
+import sqlalchemy as sa
+
+revision = 'abc123def456'
+down_revision = 'previous_revision_id'
+branch_labels = None
+depends_on = None
+
+def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    columns = {c['name'] for c in inspector.get_columns('table_name')}
+    if 'new_col' not in columns:
+        op.add_column('table_name', sa.Column('new_col', sa.String(), nullable=True))
+
+def downgrade() -> None:
+    op.drop_column('table_name', 'new_col')
+```
+
 - **Always add `server_default`** when adding a `NOT NULL` column to an existing table, otherwise the migration fails when rows already exist:
   ```python
   op.add_column('brands', sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'))

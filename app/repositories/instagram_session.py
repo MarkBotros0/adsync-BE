@@ -24,6 +24,7 @@ class InstagramSessionRepository(BaseRepository[InstagramSessionModel]):
             .filter(
                 InstagramSessionModel.brand_id == brand_id,
                 InstagramSessionModel.expires_at > datetime.utcnow(),
+                InstagramSessionModel.deleted_at.is_(None),
             )
             .order_by(InstagramSessionModel.created_at.desc())
             .first()
@@ -51,7 +52,9 @@ class InstagramSessionRepository(BaseRepository[InstagramSessionModel]):
     def delete_session(self, session_id: str) -> bool:
         session = self.get_by_session_id(session_id)
         if session:
-            self.delete(session)
+            session.deleted_at = datetime.utcnow()
+            session.updated_at = datetime.utcnow()
+            self.db.commit()
             return True
         return False
 

@@ -2,9 +2,10 @@
 
 Every JWT embeds:
   - sub        : user id (str)
-  - brand_id   : brand the user belongs to (str)
+  - org_id     : organization the user belongs to (str)
+  - brand_id   : currently active brand (str)
   - session_key: per-user nonce — rotating it invalidates all tokens (force sign-out)
-  - role       : user role string
+  - role       : SUPER | ORG_ADMIN | NORMAL
   - exp        : expiry timestamp
 """
 from datetime import datetime, timedelta
@@ -29,16 +30,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(
     user_id: int,
-    brand_id: int,
+    brand_id: int | None,
     session_key: str,
     role: str = "NORMAL",
+    org_id: int = 0,
     expires_delta: timedelta | None = None,
 ) -> str:
     """Create a signed JWT for a user account."""
     expire = datetime.utcnow() + (expires_delta or timedelta(hours=settings.jwt_access_token_expire_hours))
     payload = {
         "sub": str(user_id),
-        "brand_id": str(brand_id),
+        "org_id": str(org_id),
+        "brand_id": str(brand_id) if brand_id is not None else None,
         "session_key": session_key,
         "role": role,
         "exp": expire,

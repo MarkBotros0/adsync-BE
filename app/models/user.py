@@ -8,7 +8,8 @@ from app.database import Base
 
 class UserRole(str, enum.Enum):
     SUPER = "SUPER"
-    ADMIN = "ADMIN"   # kept in enum for DB backwards-compat; no longer assigned to new users
+    ORG_ADMIN = "ORG_ADMIN"   # org-level admin — determined by organization_memberships row
+    ADMIN = "ADMIN"            # legacy; kept for DB backwards-compat
     NORMAL = "NORMAL"
 
 
@@ -38,6 +39,9 @@ class UserModel(Base):
 
     # brand_memberships populated by UserBrandModel.user back-populates
     brand_memberships = relationship("UserBrandModel", back_populates="user", lazy="select")
+
+    # org_memberships populated by OrganizationMembershipModel.user back-populates
+    org_memberships = relationship("OrganizationMembershipModel", back_populates="user", lazy="select")
 
     # Transient: set by _validate_user_and_brand so downstream code can read .brand
     brand = None

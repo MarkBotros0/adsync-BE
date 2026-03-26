@@ -11,7 +11,17 @@ class SubscriptionRepository(BaseRepository[SubscriptionModel]):
         super().__init__(SubscriptionModel, db)
 
     def get_by_name(self, name: str) -> SubscriptionModel | None:
-        return self.get_by_field(name=name)
+        return (
+            self.db.query(SubscriptionModel)
+            .filter(SubscriptionModel.name == name)
+            .first()
+        )
+
+    def get(self, id: int) -> SubscriptionModel | None:
+        return self.db.query(SubscriptionModel).filter(SubscriptionModel.id == id).first()
+
+    def get_all(self, skip: int = 0, limit: int = 100) -> list[SubscriptionModel]:
+        return self.db.query(SubscriptionModel).offset(skip).limit(limit).all()
 
     def get_active(self) -> list[SubscriptionModel]:
         return self.db.query(SubscriptionModel).filter(

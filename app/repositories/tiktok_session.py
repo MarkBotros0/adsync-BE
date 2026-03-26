@@ -24,6 +24,7 @@ class TikTokSessionRepository(BaseRepository[TikTokSessionModel]):
             .filter(
                 TikTokSessionModel.brand_id == brand_id,
                 TikTokSessionModel.refresh_expires_at > datetime.utcnow(),
+                TikTokSessionModel.deleted_at.is_(None),
             )
             .order_by(TikTokSessionModel.created_at.desc())
             .first()
@@ -55,7 +56,9 @@ class TikTokSessionRepository(BaseRepository[TikTokSessionModel]):
     def delete_session(self, session_id: str) -> bool:
         session = self.get_by_session_id(session_id)
         if session:
-            self.delete(session)
+            session.deleted_at = datetime.utcnow()
+            session.updated_at = datetime.utcnow()
+            self.db.commit()
             return True
         return False
 

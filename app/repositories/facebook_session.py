@@ -21,10 +21,13 @@ class FacebookSessionRepository(BaseRepository[FacebookSessionModel]):
 
     def get_by_brand_id(self, brand_id: int) -> FacebookSessionModel | None:
         """Get the most recent valid session for a brand"""
-        from datetime import datetime as _dt
         return (
             self.db.query(FacebookSessionModel)
-            .filter(FacebookSessionModel.brand_id == brand_id, FacebookSessionModel.expires_at > _dt.utcnow())
+            .filter(
+                FacebookSessionModel.brand_id == brand_id,
+                FacebookSessionModel.expires_at > datetime.utcnow(),
+                FacebookSessionModel.deleted_at.is_(None),
+            )
             .order_by(FacebookSessionModel.created_at.desc())
             .first()
         )
@@ -55,10 +58,12 @@ class FacebookSessionRepository(BaseRepository[FacebookSessionModel]):
         return None
 
     def delete_session(self, session_id: str) -> bool:
-        """Delete session by session_id"""
+        """Soft-delete session by session_id"""
         session = self.get_by_session_id(session_id)
         if session:
-            self.delete(session)
+            session.deleted_at = datetime.utcnow()
+            session.updated_at = datetime.utcnow()
+            self.db.commit()
             return True
         return False
 

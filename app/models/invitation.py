@@ -21,7 +21,10 @@ class InvitationModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, nullable=False, index=True)
-    brand_id = Column(Integer, ForeignKey("brands.id"), nullable=False, index=True)
+    # brand_id is set for NORMAL (brand-scoped) invites; NULL for ORG_ADMIN (org-level) invites
+    brand_id = Column(Integer, ForeignKey("brands.id"), nullable=True, index=True)
+    # organization_id is set for ORG_ADMIN invites so the accept flow knows which org to join
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     role = Column(SAEnum(UserRole, name="userrole"), nullable=False, default=UserRole.NORMAL)
     token = Column(String, unique=True, nullable=False, index=True, default=_new_token)
     expires_at = Column(DateTime, nullable=False)
@@ -29,6 +32,7 @@ class InvitationModel(Base):
     accepted_at = Column(DateTime, nullable=True, default=None)
 
     brand = relationship("BrandModel", lazy="select")
+    organization = relationship("OrganizationModel", lazy="select")
     invited_by = relationship("UserModel", foreign_keys=[invited_by_user_id], lazy="select")
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -44,6 +48,8 @@ class InvitationModel(Base):
             "email": self.email,
             "brand_id": self.brand_id,
             "brand_name": self.brand.name if self.brand else None,
+            "organization_id": self.organization_id,
+            "org_name": self.organization.name if self.organization else None,
             "role": self.role,
             "expires_at": self.expires_at.isoformat(),
             "accepted": self.accepted_at is not None,

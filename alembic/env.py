@@ -6,10 +6,16 @@ from alembic import context
 # Load app settings and models so metadata is populated
 from app.config import get_settings
 from app.database import Base
-import app.models.facebook_session   # noqa: F401
-import app.models.instagram_session  # noqa: F401
-import app.models.brand               # noqa: F401
-import app.models.subscription        # noqa: F401
+import app.models.facebook_session        # noqa: F401
+import app.models.instagram_session       # noqa: F401
+import app.models.tiktok_session          # noqa: F401
+import app.models.organization            # noqa: F401
+import app.models.organization_membership # noqa: F401
+import app.models.brand                   # noqa: F401
+import app.models.subscription            # noqa: F401
+import app.models.user                    # noqa: F401
+import app.models.user_brand              # noqa: F401
+import app.models.invitation              # noqa: F401
 
 config = context.config
 

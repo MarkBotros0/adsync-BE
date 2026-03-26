@@ -4,42 +4,50 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
-class BrandModel(Base):
-    """Brand — a workspace within an Organization.
+class OrganizationModel(Base):
+    """Top-level tenant — represents a marketing agency.
 
-    Subscription and brand limits are managed at the Organization level.
-    Users access a brand either via OrganizationMembershipModel (ORG_ADMIN, sees all brands)
-    or via UserBrandModel (NORMAL, invited to specific brands only).
+    An organization owns a subscription and has many brands.
+    Users are linked to an organization as ORG_ADMIN via OrganizationMembershipModel.
     """
 
-    __tablename__ = "brands"
+    __tablename__ = "organizations"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     logo_url = Column(String, nullable=True)
-    website = Column(String, nullable=True)
-    industry = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
-    organization = relationship("OrganizationModel", back_populates="brands", lazy="select")
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
+    subscription = relationship("SubscriptionModel", lazy="select")
+
+    brands = relationship(
+        "BrandModel",
+        back_populates="organization",
+        lazy="select",
+        primaryjoin="and_(BrandModel.organization_id == OrganizationModel.id, BrandModel.deleted_at.is_(None))",
+    )
+
+    memberships = relationship(
+        "OrganizationMembershipModel",
+        back_populates="organization",
+        lazy="select",
+    )
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     deleted_at = Column(DateTime, nullable=True, default=None)
 
     def __repr__(self) -> str:
-        return f"<Brand {self.name}>"
+        return f"<Organization {self.name}>"
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
             "logo_url": self.logo_url,
-            "website": self.website,
-            "industry": self.industry,
             "is_active": self.is_active,
-            "organization_id": self.organization_id,
+            "subscription": self.subscription.to_dict() if self.subscription else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

@@ -17,6 +17,7 @@ from app.routers.brands import auth as brands_auth
 from app.routers.subscriptions import router as subscriptions_router
 from app.routers.content import feed as content_feed
 from app.routers.admin import router as admin_router
+from app.routers.organizations import router as organizations_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -111,6 +112,7 @@ app.include_router(brands_auth.router)
 app.include_router(subscriptions_router.router)
 app.include_router(content_feed.router)
 app.include_router(admin_router.router)
+app.include_router(organizations_router.router)
 
 
 @app.on_event("startup")
@@ -120,6 +122,8 @@ async def on_startup():
     from alembic import command
     from app.database import get_session_local, get_engine, Base
     from app.repositories.subscription import SubscriptionRepository
+    import app.models.organization           # noqa: ensure ORM model is registered
+    import app.models.organization_membership  # noqa: ensure ORM model is registered
     import app.models.brand              # noqa: ensure ORM model is registered
     import app.models.subscription       # noqa: ensure ORM model is registered
     import app.models.user               # noqa: ensure ORM model is registered

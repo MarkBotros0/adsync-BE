@@ -130,11 +130,43 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
     return await _send_mail(email, f"Ad Sync - {subject}", html)
 
 
-async def send_invitation_email(email: str, invite_url: str, brand_name: str, inviter_name: str) -> bool:
-    """Send a brand invitation link to a new user.
+async def send_invitation_email(
+    email: str,
+    invite_url: str,
+    org_name: str,
+    inviter_name: str,
+    role: str = "NORMAL",
+) -> bool:
+    """Send an invitation link to a new user.
+
+    - role=NORMAL    → invited to a specific brand workspace
+    - role=ORG_ADMIN → invited as an admin of the whole organization
 
     The link is valid for 24 hours and expires after first use.
     """
+    is_admin_invite = role == "ORG_ADMIN"
+
+    if is_admin_invite:
+        context_line = (
+            f'<strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to become an '
+            f'<strong style="color:#e9d5ff;">Admin</strong> of '
+            f'<strong style="color:#e9d5ff;">{org_name}</strong> on Ad Sync.'
+        )
+        role_badge = (
+            '<div style="display:inline-block;background-color:#3b1f6e;border:1px solid #7c3aed;'
+            'border-radius:6px;padding:4px 12px;margin-bottom:20px;">'
+            '<span style="color:#c084fc;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Org Admin</span>'
+            '</div>'
+        )
+        cta_note = 'As an admin, you will have access to all brands within this organization.'
+    else:
+        context_line = (
+            f'<strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to join '
+            f'<strong style="color:#e9d5ff;">{org_name}</strong> on Ad Sync.'
+        )
+        role_badge = ''
+        cta_note = 'Click the button below to set your password and access your account.'
+
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -155,11 +187,12 @@ async def send_invitation_email(email: str, invite_url: str, brand_name: str, in
           </div>
 
           <div style="padding:36px 30px;background-color:#15151d;">
+            {role_badge}
             <p style="font-size:15px;color:#c4b5d9;line-height:1.7;margin:0 0 16px 0;">
-              <strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to join <strong style="color:#e9d5ff;">{brand_name}</strong> on Ad Sync.
+              {context_line}
             </p>
             <p style="font-size:14px;color:#9f7bc0;line-height:1.7;margin:0 0 32px 0;">
-              Click the button below to set your password and access your account.
+              {cta_note}
             </p>
 
             <div style="text-align:center;margin:32px 0;">
@@ -172,7 +205,7 @@ async def send_invitation_email(email: str, invite_url: str, brand_name: str, in
 
             <div style="background-color:#1d1d28;border-left:3px solid #a855f7;border-radius:6px;padding:14px 16px;margin:22px 0;">
               <p style="font-size:13px;color:#c084fc;margin:0;">
-                <strong>&#9201; Important:</strong> <span style="color:#9f7bc0;">This link expires in 24 hours.</span>
+                <strong>&#9201; Important:</strong> <span style="color:#9f7bc0;">This link expires in 24 hours and can only be used once.</span>
               </p>
             </div>
 
@@ -180,7 +213,6 @@ async def send_invitation_email(email: str, invite_url: str, brand_name: str, in
               <p style="font-size:13px;color:#c084fc;margin:0 0 6px 0;font-weight:600;">&#128274; Security Note</p>
               <p style="font-size:13px;color:#9f7bc0;margin:0;line-height:1.6;">
                 If you did not expect this invitation, you can safely ignore this email.
-                This link can only be used once.
               </p>
             </div>
 
