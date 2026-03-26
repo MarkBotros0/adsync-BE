@@ -107,3 +107,18 @@ class InvitationRepository(BaseRepository[InvitationModel]):
             .order_by(InvitationModel.created_at.desc())
             .all()
         )
+
+    def get_pending_by_org(self, organization_id: int) -> list[InvitationModel]:
+        """Return pending ORG_ADMIN invitations scoped to an organization (brand_id is NULL)."""
+        return (
+            self.db.query(InvitationModel)
+            .filter(
+                InvitationModel.organization_id == organization_id,
+                InvitationModel.brand_id.is_(None),
+                InvitationModel.accepted_at.is_(None),
+                InvitationModel.expires_at > datetime.utcnow(),
+                InvitationModel.deleted_at.is_(None),
+            )
+            .order_by(InvitationModel.created_at.desc())
+            .all()
+        )

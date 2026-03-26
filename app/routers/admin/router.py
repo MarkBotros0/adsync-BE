@@ -120,15 +120,26 @@ async def list_all_invitations(_user=Depends(require_super)):
 
 @router.get("/brands/{brand_id}/invitations")
 async def list_brand_invitations(brand_id: int, current_user=Depends(require_admin_or_super)):
-    """Return pending invitations for a specific brand."""
+    """Return pending invitations for a specific brand (includes org-level ORG_ADMIN invites)."""
     role = current_user.role.value if isinstance(current_user.role, UserRole) else current_user.role
     current_brand_id = current_user.brand.id if current_user.brand else None
     if role == UserRole.ADMIN.value and current_brand_id != brand_id:
         raise HTTPException(status_code=403, detail="Access denied to this brand's invitations")
 
+    brand_repo = _get_brand_repo()
     invite_repo = _get_invite_repo()
     try:
-        invitations = invite_repo.get_pending_by_brand(brand_id)
+        brand = brand_repo.get_by_id(brand_id)
+        if not brand:
+            raise HTTPException(status_code=404, detail="Brand not found")
+
+        brand_invitations = invite_repo.get_pending_by_brand(brand_id)
+        org_invitations = (
+            invite_repo.get_pending_by_org(brand.organization_id)
+            if brand.organization_id
+            else []
+        )
+        invitations = brand_invitations + org_invitations
         for inv in invitations:
             _ = inv.brand  # eager-load while session open
         return {
@@ -137,6 +148,7 @@ async def list_brand_invitations(brand_id: int, current_user=Depends(require_adm
             "invitations": [inv.to_dict() for inv in invitations],
         }
     finally:
+        brand_repo.db.close()
         invite_repo.db.close()
 
 
