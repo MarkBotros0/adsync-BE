@@ -133,13 +133,21 @@ async def on_startup():
     import app.models.tiktok_session     # noqa: ensure ORM model is registered
 
     # Safety net: create any missing tables
-    try:
-        engine = get_engine()
-        Base.metadata.create_all(bind=engine)
-    except Exception as exc:
-        logger.error("Could not connect to database: %s", exc)
-        logger.error("Check DATABASE_URL in .env and ensure the database is reachable.")
-        raise  # re-raise so the server doesn't start in a broken state
+    # Retry a few times to handle Neon free-tier cold-start (DB suspends when idle)
+    import asyncio as _asyncio
+    engine = get_engine()
+    for _attempt in range(5):
+        try:
+            Base.metadata.create_all(bind=engine)
+            break
+        except Exception as exc:
+            if _attempt < 4:
+                logger.warning("DB not ready (attempt %d/5): %s — retrying in 3s…", _attempt + 1, exc)
+                await _asyncio.sleep(3)
+            else:
+                logger.error("Could not connect to database after 5 attempts: %s", exc)
+                logger.error("Check DATABASE_URL in .env and ensure the database is reachable.")
+                raise
 
     # Run Alembic migrations - DISABLED (run manually with: alembic upgrade head)
     # try:

@@ -11,6 +11,8 @@ Endpoints:
   GET  /brands/validate           – lightweight polling endpoint
   POST /brands/send-verification  – re-send OTP
   POST /brands/verify-email       – verify email with OTP
+  POST /brands/forgot-password    – send password-reset OTP (unauthenticated)
+  POST /brands/reset-password     – verify OTP and set new password (unauthenticated)
   POST /brands/logout             – soft logout
   POST /brands/force-signout      – rotate session_key, invalidate all JWTs
   POST /brands/invite             – invite a user by email (ORG_ADMIN or SUPER)
@@ -164,6 +166,16 @@ class AcceptInviteRequest(BaseModel):
     token: str
     name: str
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
 
 
 # ──────────────────────────────────────────────
@@ -654,6 +666,52 @@ async def verify_email(body: VerifyEmailRequest):
         return {"success": True, "message": "Email verified successfully"}
     finally:
         repo.db.close()
+
+
+@router.post("/forgot-password", status_code=200)
+async def forgot_password(body: ForgotPasswordRequest):
+    """Send a password-reset OTP to the given email.
+
+    Always returns success to avoid leaking whether an email is registered.
+    """
+    repo = _get_user_repo()
+    try:
+        user = repo.get_by_email(body.email)
+        if user and user.is_active:
+            code = generate_verification_code()
+            expires_at = datetime.utcnow() + timedelta(minutes=15)
+            repo.set_verification_code(user, code, expires_at)
+            await send_verification_email(body.email, code, type="reset")
+    finally:
+        repo.db.close()
+
+    return {"success": True, "message": "If that email is registered, a reset code has been sent"}
+
+
+@router.post("/reset-password", status_code=200)
+async def reset_password(body: ResetPasswordRequest):
+    """Verify the OTP and set a new password."""
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    repo = _get_user_repo()
+    try:
+        user = repo.get_by_email(body.email)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+
+        if (
+            user.email_verification_code != body.code
+            or user.email_verification_expires_at is None
+            or datetime.utcnow() > user.email_verification_expires_at
+        ):
+            raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+
+        repo.update_password(user, hash_password(body.new_password))
+    finally:
+        repo.db.close()
+
+    return {"success": True, "message": "Password reset successfully"}
 
 
 @router.post("/logout", status_code=200)

@@ -80,3 +80,10 @@ class UserRepository(BaseRepository[UserModel]):
         user.email_verification_expires_at = None
         user.updated_at = datetime.utcnow()
         return self.update(user)
+
+    def update_password(self, user: UserModel, hashed_password: str) -> UserModel:
+        user.hashed_password = hashed_password
+        user.email_verification_code = None
+        user.email_verification_expires_at = None
+        user.updated_at = datetime.utcnow()
+        return self.update(user)
