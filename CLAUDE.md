@@ -171,6 +171,18 @@ requirements.txt
 
 ---
 
+## No Mock Data
+
+**Never add mock, stub, hardcoded, or placeholder data under any circumstances.** This includes:
+- Hardcoded response dicts standing in for real DB or API results
+- `TODO: replace with real data` comments with fake values
+- Conditional mock branches (e.g. `if settings.debug: return mock_response`)
+- Fake seed data returned from endpoints
+
+All data must come from the real database or the real external platform API. If an integration is not yet implemented, return an appropriate HTTP error (e.g. `501 Not Implemented`) rather than fake data.
+
+---
+
 ## Key Conventions
 
 ### Routers

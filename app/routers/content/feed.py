@@ -14,6 +14,7 @@ from app.repositories.tiktok_session import TikTokSessionRepository
 from app.database import get_session_local
 from app.services.facebook.pages import PagesService
 from app.services.instagram.media import InstagramMediaService
+from app.services.instagram.insights import InstagramInsightsService
 from app.services.tiktok.videos import TikTokVideoService
 
 router = APIRouter(prefix="/content", tags=["Content Feed"])
@@ -74,8 +75,21 @@ def _fb_to_mentions(posts: list[dict[str, Any]], page_name: str) -> list[dict[st
             "language": "en",
             "hashtags": _hashtags(msg),
             "image_url": None,
+            "post_format": "Post",
         })
     return result
+
+
+def _ig_post_format(item: dict[str, Any]) -> str:
+    product_type = item.get("media_product_type", "FEED")
+    media_type = item.get("media_type", "IMAGE")
+    if product_type == "REELS":
+        return "Reel"
+    if media_type == "CAROUSEL_ALBUM":
+        return "Carousel"
+    if media_type == "VIDEO":
+        return "Video"
+    return "Image"
 
 
 def _ig_to_mentions(items: list[dict[str, Any]], username: str) -> list[dict[str, Any]]:
@@ -108,6 +122,7 @@ def _ig_to_mentions(items: list[dict[str, Any]], username: str) -> list[dict[str
             "language": "en",
             "hashtags": _hashtags(cap),
             "image_url": None,
+            "post_format": _ig_post_format(item),
         })
     return result
 
@@ -141,6 +156,7 @@ def _tt_to_mentions(videos: list[dict[str, Any]], display_name: str) -> list[dic
             "language": "en",
             "hashtags": _hashtags(content),
             "image_url": v.get("cover_image_url") or None,
+            "post_format": "Video",
         })
     return result
 
@@ -252,6 +268,111 @@ async def _noop() -> list[dict[str, Any]]:
     return []
 
 
+# ── Per-post insights helpers ─────────────────────────────────────────────────
+
+_FORMAT_TO_PRODUCT_TYPE: dict[str, str] = {
+    "Reel": "REELS",
+    "Video": "FEED",
+    "Image": "FEED",
+    "Carousel": "FEED",
+    "Post": "FEED",
+    "Story": "STORY",
+}
+
+_FORMAT_TO_MEDIA_TYPE: dict[str, str | None] = {
+    "Reel": None,
+    "Video": "VIDEO",
+    "Image": "IMAGE",
+    "Carousel": "CAROUSEL_ALBUM",
+    "Post": None,
+    "Story": None,
+}
+
+
+def _normalize_ig_insights(
+    raw: dict[str, Any],
+    post_id: str,
+    post_format: str,
+) -> dict[str, Any]:
+    """Convert Instagram media insights to the unified PostInsights shape."""
+    metrics = raw.get("metrics", {})
+    mpt = raw.get("media_product_type", _FORMAT_TO_PRODUCT_TYPE.get(post_format, "FEED"))
+
+    views = metrics.get("plays") or metrics.get("impressions") or metrics.get("video_views") or 0
+    reach = metrics.get("reach") or 0
+    likes = metrics.get("likes") or 0
+    comments = metrics.get("comments") or 0
+    shares = metrics.get("shares") or 0
+    saves = metrics.get("saved") or 0
+    total = metrics.get("total_interactions") or (likes + comments + shares + saves)
+    follows = metrics.get("follows") or 0
+
+    return {
+        "platform": "instagram",
+        "post_id": post_id,
+        "views": views,
+        "reach": reach,
+        "impressions": metrics.get("impressions"),
+        "net_follows": follows,
+        "likes": likes,
+        "comments": comments,
+        "shares": shares,
+        "saves": saves,
+        "total_interactions": total,
+        "media_product_type": mpt,
+    }
+
+
+def _normalize_fb_insights(
+    post: dict[str, Any],
+    post_id: str,
+) -> dict[str, Any]:
+    """Build PostInsights from a Facebook post's engagement data."""
+    eng = post.get("engagement") or {}
+    likes = eng.get("likes") or 0
+    comments = eng.get("comments") or 0
+    shares = eng.get("shares") or 0
+    reactions = eng.get("reactions") or 0
+    total = eng.get("total") or (likes + comments + shares)
+    reach = reactions * 10
+
+    return {
+        "platform": "facebook",
+        "post_id": post_id,
+        "views": reach,
+        "reach": reach,
+        "likes": likes,
+        "comments": comments,
+        "shares": shares,
+        "total_interactions": total,
+        "media_product_type": "POST",
+    }
+
+
+def _normalize_tt_insights(
+    video: dict[str, Any],
+    post_id: str,
+) -> dict[str, Any]:
+    """Build PostInsights from TikTok video engagement data."""
+    eng = video.get("engagement") or {}
+    likes = eng.get("likes") or 0
+    comments = eng.get("comments") or 0
+    shares = eng.get("shares") or 0
+    views = eng.get("views") or 0
+
+    return {
+        "platform": "tiktok",
+        "post_id": post_id,
+        "views": views,
+        "reach": views,
+        "likes": likes,
+        "comments": comments,
+        "shares": shares,
+        "total_interactions": likes + comments + shares,
+        "media_product_type": "VIDEO",
+    }
+
+
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
 @router.get("/feed")
@@ -345,3 +466,103 @@ async def get_content_feed(
             "stats": stats,
         },
     }
+
+
+# ── Per-post insights endpoint ────────────────────────────────────────────────
+
+@router.get("/post/{platform}/{post_id}/insights")
+async def get_post_insights(
+    platform: str,
+    post_id: str,
+    post_format: str = Query("Post", description="Post format: Post, Image, Video, Reel, Carousel"),
+    brand=Depends(require_brand),
+) -> dict[str, Any]:
+    """Fetch per-post insights for a single content item.
+
+    Returns a normalised PostInsights payload regardless of platform.
+    Auth: Brand JWT Bearer token. Sessions are resolved by brand_id.
+    """
+    brand_id: int = brand.id
+    plat = platform.lower()
+
+    if plat == "instagram":
+        db = get_session_local()()
+        try:
+            ig_session = InstagramSessionRepository(db).get_by_brand_id(brand_id)
+            if not ig_session:
+                return {"success": False, "error": "Instagram not connected"}
+            access_token = ig_session.access_token
+        finally:
+            db.close()
+
+        mpt = _FORMAT_TO_PRODUCT_TYPE.get(post_format, "FEED")
+        mt = _FORMAT_TO_MEDIA_TYPE.get(post_format)
+        svc = InstagramInsightsService(access_token=access_token)
+        raw = await svc.fetch_media_insights(post_id, media_product_type=mpt, media_type=mt)
+        return {"success": True, "data": _normalize_ig_insights(raw, post_id, post_format)}
+
+    if plat == "facebook":
+        db = get_session_local()()
+        try:
+            fb_session = FacebookSessionRepository(db).get_by_brand_id(brand_id)
+            if not fb_session:
+                return {"success": False, "error": "Facebook not connected"}
+            user_token = fb_session.access_token
+        finally:
+            db.close()
+
+        try:
+            pages_svc = PagesService(access_token=user_token)
+            pages_data = await pages_svc.fetch_pages()
+            pages = pages_data.get("data", [])
+            if not pages:
+                return {"success": False, "error": "No Facebook pages found"}
+            page = pages[0]
+            page_token = page.get("access_token", user_token)
+            page_id = page["id"]
+            posts_svc = PagesService(access_token=page_token)
+            raw_posts = await posts_svc.fetch_page_posts(page_id, limit=50)
+            posts = raw_posts.get("data", [])
+            post = next((p for p in posts if p.get("id") == post_id), None)
+            if not post:
+                return {"success": True, "data": {
+                    "platform": "facebook", "post_id": post_id,
+                    "views": 0, "likes": 0, "comments": 0, "shares": 0, "total_interactions": 0,
+                }}
+            likes = post.get("likes", {}).get("summary", {}).get("total_count", 0)
+            comments = post.get("comments", {}).get("summary", {}).get("total_count", 0)
+            shares = post.get("shares", {}).get("count", 0)
+            reactions = post.get("reactions", {}).get("summary", {}).get("total_count", 0)
+            eng = {"likes": likes, "comments": comments, "shares": shares, "reactions": reactions, "total": likes + comments + shares}
+            return {"success": True, "data": _normalize_fb_insights({"engagement": eng}, post_id)}
+        except Exception as e:
+            logger.warning("Failed to fetch Facebook post insights for %s: %s", post_id, e)
+            return {"success": False, "error": str(e)}
+
+    if plat == "tiktok":
+        db = get_session_local()()
+        try:
+            tt_session = TikTokSessionRepository(db).get_by_brand_id(brand_id)
+            if not tt_session:
+                return {"success": False, "error": "TikTok not connected"}
+            access_token = tt_session.access_token
+        finally:
+            db.close()
+
+        try:
+            svc = TikTokVideoService(access_token=access_token)
+            raw = await svc.fetch_videos(max_count=20)
+            formatted = svc.format_video_list(raw)
+            videos = formatted.get("videos", [])
+            video = next((v for v in videos if str(v.get("id")) == post_id), None)
+            if not video:
+                return {"success": True, "data": {
+                    "platform": "tiktok", "post_id": post_id,
+                    "views": 0, "likes": 0, "comments": 0, "shares": 0, "total_interactions": 0,
+                }}
+            return {"success": True, "data": _normalize_tt_insights(video, post_id)}
+        except Exception as e:
+            logger.warning("Failed to fetch TikTok video insights for %s: %s", post_id, e)
+            return {"success": False, "error": str(e)}
+
+    return {"success": False, "error": f"Unsupported platform: {platform}"}
