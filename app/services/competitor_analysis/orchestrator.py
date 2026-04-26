@@ -1,8 +1,13 @@
-"""End-to-end orchestrator: runs all 6 Apify actors for a single job."""
+"""Single-actor orchestrator.
+
+Each scraper now runs as its own job (one row in ``competitor_analysis_jobs``
+with ``actors_total=1``). The whole "refresh all six" flow is gone — users
+configure per-actor targets and explicitly run each scraper.
+"""
 import asyncio
 import functools
 import logging
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 from app.config import get_settings
 from app.database import get_session_local
@@ -13,11 +18,11 @@ from app.models.competitor_analysis_result import (
     ACTOR_INSTAGRAM,
     ACTOR_TIKTOK,
     ACTOR_WEBSITE,
-    ALL_ACTOR_KEYS,
 )
+from app.repositories.apify_run import ApifyRunRepository
 from app.repositories.competitor_analysis_job import CompetitorAnalysisJobRepository
 from app.repositories.competitor_analysis_result import CompetitorAnalysisResultRepository
-from app.services.competitor_analysis.apify_client import ApifyClient
+from app.repositories.competitor_target import CompetitorTargetRepository
 from app.services.competitor_analysis.actor_inputs import (
     ACTOR_FACEBOOK_ADS_ID,
     ACTOR_GOOGLE_PLACES_ID,
@@ -25,6 +30,7 @@ from app.services.competitor_analysis.actor_inputs import (
     ACTOR_INSTAGRAM_ID,
     ACTOR_TIKTOK_ID,
     ACTOR_WEBSITE_ID,
+    Target,
     build_facebook_ads_input,
     build_google_places_input,
     build_google_search_input,
@@ -32,8 +38,8 @@ from app.services.competitor_analysis.actor_inputs import (
     build_tiktok_input,
     build_website_input,
 )
+from app.services.competitor_analysis.apify_client import ApifyClient, RunOutcome
 from app.services.competitor_analysis.normalizers import (
-    extract_top_url_from_serp,
     normalize_facebook_ads,
     normalize_google_places,
     normalize_google_search,
@@ -41,319 +47,137 @@ from app.services.competitor_analysis.normalizers import (
     normalize_tiktok,
     normalize_website,
 )
+from app.utils.exceptions import ApifyActorError
 
 
 logger = logging.getLogger(__name__)
 
 
-# Map actor_key -> (apify actor id, default timeout seconds, normalizer)
-_INDEPENDENT_ACTORS: dict[str, tuple[str, int, Callable[[list[dict[str, Any]]], tuple[Any, dict[str, Any]]]]] = {
-    ACTOR_FACEBOOK_ADS: (ACTOR_FACEBOOK_ADS_ID, 240, normalize_facebook_ads),
-    ACTOR_INSTAGRAM: (ACTOR_INSTAGRAM_ID, 240, normalize_instagram),
-    ACTOR_TIKTOK: (ACTOR_TIKTOK_ID, 240, normalize_tiktok),
-    ACTOR_GOOGLE_PLACES: (ACTOR_GOOGLE_PLACES_ID, 240, normalize_google_places),
+# Actor-key → (apify actor id, default timeout, input builder, normalizer)
+_ACTOR_REGISTRY: dict[
+    str,
+    tuple[
+        str,
+        int,
+        Callable[[Target], dict[str, Any]],
+        Callable[[list[dict[str, Any]]], tuple[Any, dict[str, Any]]],
+    ],
+] = {
+    ACTOR_FACEBOOK_ADS: (ACTOR_FACEBOOK_ADS_ID, 240, build_facebook_ads_input, normalize_facebook_ads),
+    ACTOR_INSTAGRAM:    (ACTOR_INSTAGRAM_ID,    300, build_instagram_input,    normalize_instagram),
+    ACTOR_TIKTOK:       (ACTOR_TIKTOK_ID,       300, build_tiktok_input,       normalize_tiktok),
+    ACTOR_GOOGLE_SEARCH:(ACTOR_GOOGLE_SEARCH_ID,180, build_google_search_input,normalize_google_search),
+    ACTOR_GOOGLE_PLACES:(ACTOR_GOOGLE_PLACES_ID,300, build_google_places_input,normalize_google_places),
+    ACTOR_WEBSITE:      (ACTOR_WEBSITE_ID,      360, build_website_input,      normalize_website),
 }
 
 
-# ── Public entry point ────────────────────────────────────────────────────────
+# ── Public entry points ───────────────────────────────────────────────────────
 
-async def run_analysis(job_id: int, competitor_id: int, brand_id: int, name: str) -> None:
-    """Run all 6 Apify actors for the job and persist normalized results.
-
-    Always opens a fresh DB session — must not share the request-bound session.
-    Failures of individual actors do not abort the whole job.
-    """
-    settings = get_settings()
-    token = settings.apify_api_token
-
-    if not token:
-        _mark_job_failed(job_id, "APIFY_API_TOKEN is not configured on the server")
-        return
-
-    client = ApifyClient(token)
-
-    _mark_job_running(job_id)
-
-    # Pre-create the 6 result rows so the frontend can show 6 pending tabs immediately.
-    result_ids = _ensure_result_rows(job_id, competitor_id, brand_id)
-
-    try:
-        # SERP runs first (also drives the website crawler).
-        serp_task = asyncio.create_task(
-            _run_one(
-                client=client,
-                actor_key=ACTOR_GOOGLE_SEARCH,
-                actor_id=ACTOR_GOOGLE_SEARCH_ID,
-                run_input=build_google_search_input(name),
-                normalizer=normalize_google_search,
-                job_id=job_id,
-                result_id=result_ids[ACTOR_GOOGLE_SEARCH],
-                timeout=180,
-            )
-        )
-
-        independent_tasks: list[asyncio.Task[None]] = []
-        for actor_key, (actor_id, timeout, normalizer) in _INDEPENDENT_ACTORS.items():
-            run_input = _build_independent_input(actor_key, name)
-            if actor_key == ACTOR_FACEBOOK_ADS:
-                normalizer = functools.partial(normalize_facebook_ads, brand_name=name)
-            independent_tasks.append(
-                asyncio.create_task(
-                    _run_one(
-                        client=client,
-                        actor_key=actor_key,
-                        actor_id=actor_id,
-                        run_input=run_input,
-                        normalizer=normalizer,
-                        job_id=job_id,
-                        result_id=result_ids[actor_key],
-                        timeout=timeout,
-                    )
-                )
-            )
-
-        # Wait for SERP — its output gates the website crawler.
-        serp_data = await serp_task
-
-        website_task = asyncio.create_task(
-            _run_website(
-                client=client,
-                serp_data=serp_data,
-                name=name,
-                job_id=job_id,
-                result_id=result_ids[ACTOR_WEBSITE],
-            )
-        )
-
-        await asyncio.gather(*independent_tasks, website_task, return_exceptions=True)
-
-    except Exception as exc:
-        logger.exception("Competitor analysis orchestrator crashed: job=%s", job_id)
-        _mark_job_failed(job_id, f"Orchestrator crashed: {exc}")
-        return
-
-    _finalize_job(job_id)
-
-
-# ── Single-actor retry (per-tab refresh) ──────────────────────────────────────
-
-async def run_single_actor(
+async def run_target(
+    *,
     job_id: int,
     result_id: int,
+    target_id: int,
     competitor_id: int,
     brand_id: int,
-    name: str,
     actor_key: str,
+    target_value: str,
+    target_type: str,
+    competitor_name: str,
 ) -> None:
-    """Re-run one actor inside an existing job.
+    """Run one scraper end-to-end and persist results + cost.
 
-    Used by the per-tab Retry button. Updates the existing result row in place
-    and re-finalizes the job when done.
+    Always opens a fresh DB session — must not share the request-bound session.
+    Cost-ledger writes are best-effort: if Apify's metadata endpoint fails we
+    still record the result.
     """
     settings = get_settings()
     token = settings.apify_api_token
-
     if not token:
         _record_actor_failure(job_id, result_id, "APIFY_API_TOKEN is not configured on the server")
         _finalize_job(job_id)
         return
 
+    if actor_key not in _ACTOR_REGISTRY:
+        _record_actor_failure(job_id, result_id, f"Unknown actor: {actor_key}")
+        _finalize_job(job_id)
+        return
+
+    actor_id, timeout, build_input, normalizer = _ACTOR_REGISTRY[actor_key]
+
+    if actor_key == ACTOR_FACEBOOK_ADS:
+        normalizer = functools.partial(normalize_facebook_ads, brand_name=competitor_name)
+
+    target = Target(actor_key=actor_key, target_value=target_value, target_type=target_type)
+    try:
+        run_input = build_input(target)
+    except Exception as exc:  # noqa: BLE001
+        _record_actor_failure(job_id, result_id, f"invalid target: {exc}")
+        _finalize_job(job_id)
+        return
+
     client = ApifyClient(token)
 
-    try:
-        if actor_key == ACTOR_GOOGLE_SEARCH:
-            await _run_one(
-                client=client,
-                actor_key=actor_key,
-                actor_id=ACTOR_GOOGLE_SEARCH_ID,
-                run_input=build_google_search_input(name),
-                normalizer=normalize_google_search,
-                job_id=job_id,
-                result_id=result_id,
-                timeout=180,
-            )
-        elif actor_key == ACTOR_WEBSITE:
-            # Reuse the most recent google_search result for the same competitor
-            # to find a URL; if not available, fail fast with a friendly message.
-            top_url = _latest_serp_top_url(competitor_id)
-            if not top_url:
-                _record_actor_failure(
-                    job_id,
-                    result_id,
-                    "Cannot retry Website without a Google Search result. "
-                    "Refresh the SERP tab first or run a full Refresh.",
-                )
-            else:
-                await _run_one(
-                    client=client,
-                    actor_key=actor_key,
-                    actor_id=ACTOR_WEBSITE_ID,
-                    run_input=build_website_input(top_url),
-                    normalizer=normalize_website,
-                    job_id=job_id,
-                    result_id=result_id,
-                    timeout=300,
-                )
-        elif actor_key in _INDEPENDENT_ACTORS:
-            actor_id, timeout, normalizer = _INDEPENDENT_ACTORS[actor_key]
-            if actor_key == ACTOR_FACEBOOK_ADS:
-                normalizer = functools.partial(normalize_facebook_ads, brand_name=name)
-            await _run_one(
-                client=client,
-                actor_key=actor_key,
-                actor_id=actor_id,
-                run_input=_build_independent_input(actor_key, name),
-                normalizer=normalizer,
-                job_id=job_id,
-                result_id=result_id,
-                timeout=timeout,
-            )
-        else:
-            _record_actor_failure(job_id, result_id, f"Unknown actor: {actor_key}")
-    except Exception as exc:
-        logger.exception("Single-actor retry crashed: actor=%s job=%s", actor_key, job_id)
-        _record_actor_failure(job_id, result_id, f"Retry crashed: {exc}")
+    # Open a ledger row up-front so we can record cost even if the run fails.
+    ledger_id = _start_ledger(
+        brand_id=brand_id,
+        competitor_id=competitor_id,
+        result_id=result_id,
+        actor_key=actor_key,
+    )
 
-    _finalize_job(job_id)
-
-
-def _latest_serp_top_url(competitor_id: int) -> str | None:
-    """Look up the most recent completed Google Search result for this competitor
-    and return its top organic URL, if any."""
-    db = get_session_local()()
-    try:
-        from app.models.competitor_analysis_result import (
-            ACTOR_GOOGLE_SEARCH as _SERP_KEY,
-            CompetitorAnalysisResultModel,
-            RESULT_STATUS_COMPLETED,
-        )
-        row = (
-            db.query(CompetitorAnalysisResultModel)
-            .filter(
-                CompetitorAnalysisResultModel.competitor_id == competitor_id,
-                CompetitorAnalysisResultModel.actor_key == _SERP_KEY,
-                CompetitorAnalysisResultModel.status == RESULT_STATUS_COMPLETED,
-                CompetitorAnalysisResultModel.deleted_at.is_(None),
-            )
-            .order_by(CompetitorAnalysisResultModel.finished_at.desc())
-            .first()
-        )
-        if not row or not row.data:
-            return None
-        return extract_top_url_from_serp(row.data)
-    finally:
-        db.close()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _build_independent_input(actor_key: str, name: str) -> dict[str, Any]:
-    if actor_key == ACTOR_FACEBOOK_ADS:
-        return build_facebook_ads_input(name)
-    if actor_key == ACTOR_INSTAGRAM:
-        return build_instagram_input(name)
-    if actor_key == ACTOR_TIKTOK:
-        return build_tiktok_input(name)
-    if actor_key == ACTOR_GOOGLE_PLACES:
-        return build_google_places_input(name)
-    raise ValueError(f"Unsupported independent actor: {actor_key}")
-
-
-async def _run_one(
-    *,
-    client: ApifyClient,
-    actor_key: str,
-    actor_id: str,
-    run_input: dict[str, Any],
-    normalizer: Callable[[list[dict[str, Any]]], tuple[Any, dict[str, Any]]],
-    job_id: int,
-    result_id: int,
-    timeout: int,
-) -> Any:
-    """Run a single actor end-to-end: mark running → call → normalize → save.
-
-    Returns the normalized data on success (so chained actors can use it),
-    or ``None`` on failure. Exceptions are caught and logged.
-    """
-    db = get_session_local()()
-    try:
-        CompetitorAnalysisResultRepository(db).mark_running(result_id)
-    finally:
-        db.close()
+    _mark_result_running(result_id)
+    _mark_job_running(job_id)
 
     try:
-        items = await asyncio.wait_for(
+        outcome = await asyncio.wait_for(
             client.run_actor(actor_id=actor_id, run_input=run_input, timeout_seconds=timeout),
             timeout=timeout + 60,
         )
     except asyncio.TimeoutError:
         _record_actor_failure(job_id, result_id, f"timeout after {timeout + 60}s")
-        return None
-    except Exception as exc:  # noqa: BLE001 — we want to catch *anything* and isolate failure
+        await _finalize_ledger(client, ledger_id, run_id=None, success=False)
+        _finalize_job(job_id)
+        _mark_target_run(target_id, cost_usd=None)
+        return
+    except ApifyActorError as exc:
         logger.warning("Actor %s failed for job %s: %s", actor_id, job_id, exc)
         _record_actor_failure(job_id, result_id, str(exc))
-        return None
+        await _finalize_ledger(client, ledger_id, run_id=exc.run_id, success=False)
+        _mark_target_run(target_id, cost_usd=None)
+        _finalize_job(job_id)
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Unexpected actor failure: actor=%s job=%s", actor_id, job_id)
+        _record_actor_failure(job_id, result_id, f"unexpected error: {exc}")
+        await _finalize_ledger(client, ledger_id, run_id=None, success=False)
+        _mark_target_run(target_id, cost_usd=None)
+        _finalize_job(job_id)
+        return
 
     try:
-        data, summary = normalizer(items)
+        data, summary = normalizer(outcome.items)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Normalizer for %s failed", actor_key)
         _record_actor_failure(job_id, result_id, f"normalizer error: {exc}")
-        return None
-
-    _record_actor_success(job_id, result_id, data, summary)
-    return data
-
-
-async def _run_website(
-    *,
-    client: ApifyClient,
-    serp_data: Any,
-    name: str,
-    job_id: int,
-    result_id: int,
-) -> None:
-    """Run the website crawler against the top SERP result."""
-    if not isinstance(serp_data, dict):
-        _record_actor_failure(job_id, result_id, "no SERP data — website crawl skipped")
+        await _finalize_ledger(client, ledger_id, run_id=outcome.run_id, success=False)
+        _mark_target_run(target_id, cost_usd=None)
+        _finalize_job(job_id)
         return
 
-    top_url = extract_top_url_from_serp(serp_data)
-    if not top_url:
-        _record_actor_failure(job_id, result_id, "no usable URL in SERP results")
-        return
-
-    await _run_one(
-        client=client,
-        actor_key=ACTOR_WEBSITE,
-        actor_id=ACTOR_WEBSITE_ID,
-        run_input=build_website_input(top_url),
-        normalizer=normalize_website,
-        job_id=job_id,
-        result_id=result_id,
-        timeout=300,
-    )
+    _record_actor_success(job_id, result_id, data, summary, apify_run_id=outcome.run_id)
+    cost_usd = await _finalize_ledger(client, ledger_id, run_id=outcome.run_id, success=True)
+    _mark_target_run(target_id, cost_usd=cost_usd)
+    _finalize_job(job_id)
 
 
-def _ensure_result_rows(job_id: int, competitor_id: int, brand_id: int) -> dict[str, int]:
-    """Create one result row per actor; return ``{actor_key: result_id}``."""
+# ── DB helpers ────────────────────────────────────────────────────────────────
+
+def _mark_result_running(result_id: int) -> None:
     db = get_session_local()()
     try:
-        repo = CompetitorAnalysisResultRepository(db)
-        out: dict[str, int] = {}
-        for key in ALL_ACTOR_KEYS:
-            existing = repo.get_by_job_and_actor(job_id, key)
-            if existing:
-                out[key] = existing.id
-            else:
-                row = repo.create_pending(
-                    job_id=job_id,
-                    competitor_id=competitor_id,
-                    brand_id=brand_id,
-                    actor_key=key,
-                )
-                out[key] = row.id
-        return out
+        CompetitorAnalysisResultRepository(db).mark_running(result_id)
     finally:
         db.close()
 
@@ -374,18 +198,23 @@ def _finalize_job(job_id: int) -> None:
         db.close()
 
 
-def _mark_job_failed(job_id: int, message: str) -> None:
+def _record_actor_success(
+    job_id: int,
+    result_id: int,
+    data: Any,
+    summary: dict[str, Any],
+    *,
+    apify_run_id: str | None,
+) -> None:
     db = get_session_local()()
     try:
-        CompetitorAnalysisJobRepository(db).mark_failed(job_id, message)
-    finally:
-        db.close()
-
-
-def _record_actor_success(job_id: int, result_id: int, data: Any, summary: dict[str, Any]) -> None:
-    db = get_session_local()()
-    try:
-        CompetitorAnalysisResultRepository(db).mark_completed(result_id, data, summary)
+        repo = CompetitorAnalysisResultRepository(db)
+        if apify_run_id:
+            row = repo.get(result_id)
+            if row:
+                row.apify_run_id = apify_run_id
+                db.commit()
+        repo.mark_completed(result_id, data, summary)
         CompetitorAnalysisJobRepository(db).increment_done(job_id)
     finally:
         db.close()
@@ -396,5 +225,72 @@ def _record_actor_failure(job_id: int, result_id: int, error: str) -> None:
     try:
         CompetitorAnalysisResultRepository(db).mark_failed(result_id, error)
         CompetitorAnalysisJobRepository(db).increment_failed(job_id)
+    finally:
+        db.close()
+
+
+def _start_ledger(
+    *,
+    brand_id: int,
+    competitor_id: int,
+    result_id: int,
+    actor_key: str,
+) -> int:
+    db = get_session_local()()
+    try:
+        run = ApifyRunRepository(db).start_run(
+            brand_id=brand_id,
+            competitor_id=competitor_id,
+            result_id=result_id,
+            actor_key=actor_key,
+        )
+        return run.id
+    finally:
+        db.close()
+
+
+async def _finalize_ledger(
+    client: ApifyClient,
+    ledger_id: int,
+    *,
+    run_id: str | None,
+    success: bool,
+) -> float | None:
+    """Best-effort: fetch run meta and write the cost row. Returns cost USD."""
+    meta = None
+    if run_id:
+        try:
+            meta = await client.fetch_run_meta(run_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("fetch_run_meta crashed; skipping cost capture")
+
+    db = get_session_local()()
+    try:
+        repo = ApifyRunRepository(db)
+        if success:
+            repo.finalize_success(
+                ledger_id,
+                apify_run_id=meta.run_id if meta else run_id,
+                compute_units=meta.compute_units if meta else None,
+                usage_total_usd=meta.usage_total_usd if meta else None,
+                dataset_id=meta.dataset_id if meta else None,
+            )
+        else:
+            repo.finalize_failure(
+                ledger_id,
+                apify_run_id=meta.run_id if meta else run_id,
+                compute_units=meta.compute_units if meta else None,
+                usage_total_usd=meta.usage_total_usd if meta else None,
+            )
+    finally:
+        db.close()
+
+    return meta.usage_total_usd if meta else None
+
+
+def _mark_target_run(target_id: int, cost_usd: float | None) -> None:
+    db = get_session_local()()
+    try:
+        CompetitorTargetRepository(db).mark_run(target_id, cost_usd)
     finally:
         db.close()

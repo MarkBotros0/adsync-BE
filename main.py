@@ -19,6 +19,7 @@ from app.routers.content import feed as content_feed
 from app.routers.admin import router as admin_router
 from app.routers.organizations import router as organizations_router
 from app.routers.competitors import router as competitors_router
+from app.routers.usage import router as usage_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -115,6 +116,7 @@ app.include_router(content_feed.router)
 app.include_router(admin_router.router)
 app.include_router(organizations_router.router)
 app.include_router(competitors_router.router)
+app.include_router(usage_router.router)
 
 
 @app.on_event("startup")
@@ -136,6 +138,8 @@ async def on_startup():
     import app.models.competitor                    # noqa: ensure ORM model is registered
     import app.models.competitor_analysis_job       # noqa: ensure ORM model is registered
     import app.models.competitor_analysis_result    # noqa: ensure ORM model is registered
+    import app.models.competitor_target              # noqa: ensure ORM model is registered
+    import app.models.apify_run                       # noqa: ensure ORM model is registered
 
     # Safety net: create any missing tables
     # Retry a few times to handle Neon free-tier cold-start (DB suspends when idle)
@@ -217,7 +221,7 @@ async def on_startup():
                 job.status = JOB_STATUS_FAILED
                 job.error_message = (
                     "Server restarted before this scrape completed. "
-                    "Click Refresh to try again."
+                    "Run the scraper again to retry."
                 )
                 job.finished_at = now
                 job.updated_at = now

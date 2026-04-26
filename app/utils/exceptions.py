@@ -19,9 +19,21 @@ class SessionNotFoundError(Exception):
 
 
 class ApifyActorError(Exception):
-    """Raised when an Apify actor run fails or times out."""
+    """Raised when an Apify actor run fails or times out.
 
-    def __init__(self, actor_id: str, message: str):
+    Carries ``run_id`` / ``dataset_id`` when available so callers can still
+    persist a cost-ledger row for the failed run.
+    """
+
+    def __init__(
+        self,
+        actor_id: str,
+        message: str,
+        run_id: str | None = None,
+        dataset_id: str | None = None,
+    ):
         self.actor_id = actor_id
+        self.run_id = run_id
+        self.dataset_id = dataset_id
         super().__init__(f"[{actor_id}] {message}")
 
