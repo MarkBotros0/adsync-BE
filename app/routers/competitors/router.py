@@ -504,24 +504,33 @@ async def get_actor_results(
 
         res_repo.heal_stuck_for_competitor(competitor.id)
 
+        # Find the latest result row for THIS actor across all jobs (not just
+        # the latest job — the latest job may be for a different actor).
+        from app.models.competitor_analysis_result import CompetitorAnalysisResultModel
+        result = (
+            db.query(CompetitorAnalysisResultModel)
+            .filter(
+                CompetitorAnalysisResultModel.competitor_id == competitor.id,
+                CompetitorAnalysisResultModel.actor_key == actor_key,
+                CompetitorAnalysisResultModel.deleted_at.is_(None),
+            )
+            .order_by(CompetitorAnalysisResultModel.created_at.desc())
+            .first()
+        )
         job = job_repo.latest_for_competitor(competitor.id)
         result_payload: ActorResultOut
-        if not job:
-            result_payload = ActorResultOut(actor_key=actor_key, status="pending")
+        if not result:
+            result_payload = ActorResultOut(actor_key=actor_key, status="idle")
         else:
-            result = res_repo.get_by_job_and_actor(job.id, actor_key)
-            if not result:
-                result_payload = ActorResultOut(actor_key=actor_key, status="pending")
-            else:
-                result_payload = ActorResultOut(
-                    actor_key=result.actor_key,
-                    status=result.status,
-                    summary=result.summary,
-                    data=result.data,
-                    error=result.error,
-                    started_at=result.started_at,
-                    finished_at=result.finished_at,
-                )
+            result_payload = ActorResultOut(
+                actor_key=result.actor_key,
+                status=result.status,
+                summary=result.summary,
+                data=result.data,
+                error=result.error,
+                started_at=result.started_at,
+                finished_at=result.finished_at,
+            )
 
         return {
             "success": True,
@@ -634,7 +643,7 @@ async def get_competitor_results(
 
         for key in ALL_ACTOR_KEYS:
             actors_by_key.setdefault(
-                key, ActorResultOut(actor_key=key, status="pending")
+                key, ActorResultOut(actor_key=key, status="idle")
             )
 
         last_job = job_repo.latest_for_competitor(competitor.id)
