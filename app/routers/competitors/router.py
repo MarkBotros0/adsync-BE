@@ -352,6 +352,9 @@ async def run_actor(
         job_repo = CompetitorAnalysisJobRepository(db)
         res_repo = CompetitorAnalysisResultRepository(db)
 
+        # Auto-heal stuck rows so a dead worker can't block re-runs forever.
+        res_repo.heal_stuck_for_competitor(competitor_id)
+
         competitor = comp_repo.get_for_brand(brand_id, competitor_id)
         if not competitor:
             raise HTTPException(status_code=404, detail="Competitor not found")
@@ -363,7 +366,8 @@ async def run_actor(
                 detail="No enabled target configured for this scraper. Add one before running.",
             )
 
-        # Reject if a job for this competitor + actor is already running.
+        # Reject only if the latest result for THIS actor is still alive after
+        # the heal pass — a stuck row from a dead worker shouldn't block re-runs.
         latest_job = job_repo.latest_for_competitor(competitor.id)
         if latest_job and latest_job.status in JOB_ACTIVE_STATUSES:
             latest_result = res_repo.get_by_job_and_actor(latest_job.id, actor_key)
@@ -498,6 +502,8 @@ async def get_actor_results(
         if not competitor:
             raise HTTPException(status_code=404, detail="Competitor not found")
 
+        res_repo.heal_stuck_for_competitor(competitor.id)
+
         job = job_repo.latest_for_competitor(competitor.id)
         result_payload: ActorResultOut
         if not job:
@@ -596,6 +602,8 @@ async def get_competitor_results(
         competitor = comp_repo.get_for_brand(brand_id, competitor_id)
         if not competitor:
             raise HTTPException(status_code=404, detail="Competitor not found")
+
+        res_repo.heal_stuck_for_competitor(competitor.id)
 
         # Latest result row per actor — newest wins.
         from app.models.competitor_analysis_result import CompetitorAnalysisResultModel

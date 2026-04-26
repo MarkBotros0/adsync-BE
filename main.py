@@ -228,12 +228,120 @@ async def on_startup():
             if stuck:
                 db.commit()
                 logger.info("Recovered %d orphaned competitor-analysis job(s)", len(stuck))
+
+            # Also reap stuck result rows — without this, the per-actor status
+            # stays "running" forever after a restart and the 409 gate blocks
+            # the user from re-running.
+            from app.models.competitor_analysis_result import (
+                CompetitorAnalysisResultModel,
+                RESULT_STATUS_FAILED,
+                RESULT_STATUS_PENDING,
+                RESULT_STATUS_RUNNING,
+            )
+            stuck_results = (
+                db.query(CompetitorAnalysisResultModel)
+                .filter(
+                    CompetitorAnalysisResultModel.deleted_at.is_(None),
+                    CompetitorAnalysisResultModel.status.in_(
+                        [RESULT_STATUS_PENDING, RESULT_STATUS_RUNNING]
+                    ),
+                    CompetitorAnalysisResultModel.created_at < cutoff,
+                )
+                .all()
+            )
+            for r in stuck_results:
+                r.status = RESULT_STATUS_FAILED
+                r.error = (
+                    "Server restarted before this scrape completed. "
+                    "Run the scraper again to retry."
+                )
+                r.finished_at = now
+                r.updated_at = now
+            if stuck_results:
+                db.commit()
+                logger.info("Recovered %d orphaned competitor-analysis result(s)", len(stuck_results))
         finally:
             db.close()
     except Exception as exc:
         logger.warning("Orphan-job recovery skipped: %s", exc)
 
     logger.info("Server ready")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    """Mark every in-flight competitor scrape as failed before the process exits.
+
+    Background tasks get cancelled at shutdown — without this the rows stay at
+    ``running`` until the next start-up reaper sweep, which delays the failure
+    surfaced to the user. Best-effort: if it crashes we just log and move on.
+    """
+    try:
+        from datetime import datetime
+        from app.database import get_session_local
+        from app.models.competitor_analysis_job import (
+            CompetitorAnalysisJobModel,
+            JOB_STATUS_FAILED,
+            JOB_STATUS_PENDING,
+            JOB_STATUS_RUNNING,
+        )
+        from app.models.competitor_analysis_result import (
+            CompetitorAnalysisResultModel,
+            RESULT_STATUS_FAILED,
+            RESULT_STATUS_PENDING,
+            RESULT_STATUS_RUNNING,
+        )
+
+        db = get_session_local()()
+        try:
+            now = datetime.utcnow()
+            interrupted_msg = (
+                "Run interrupted — the server was stopped or restarted before "
+                "this scraper finished. Run the scraper again to retry."
+            )
+
+            jobs = (
+                db.query(CompetitorAnalysisJobModel)
+                .filter(
+                    CompetitorAnalysisJobModel.deleted_at.is_(None),
+                    CompetitorAnalysisJobModel.status.in_(
+                        [JOB_STATUS_PENDING, JOB_STATUS_RUNNING]
+                    ),
+                )
+                .all()
+            )
+            for j in jobs:
+                j.status = JOB_STATUS_FAILED
+                j.error_message = interrupted_msg
+                j.finished_at = now
+                j.updated_at = now
+
+            results = (
+                db.query(CompetitorAnalysisResultModel)
+                .filter(
+                    CompetitorAnalysisResultModel.deleted_at.is_(None),
+                    CompetitorAnalysisResultModel.status.in_(
+                        [RESULT_STATUS_PENDING, RESULT_STATUS_RUNNING]
+                    ),
+                )
+                .all()
+            )
+            for r in results:
+                r.status = RESULT_STATUS_FAILED
+                r.error = interrupted_msg
+                r.finished_at = now
+                r.updated_at = now
+
+            if jobs or results:
+                db.commit()
+                logger.info(
+                    "Shutdown handler marked %d in-flight job(s) and %d result(s) as failed",
+                    len(jobs), len(results),
+                )
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Shutdown failure-marking skipped: %s", exc)
 
 
 @app.get("/")

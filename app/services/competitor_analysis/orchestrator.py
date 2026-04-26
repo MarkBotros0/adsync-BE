@@ -135,6 +135,24 @@ async def run_target(
             client.run_actor(actor_id=actor_id, run_input=run_input, timeout_seconds=timeout),
             timeout=timeout + 60,
         )
+    except asyncio.CancelledError:
+        # Worker was cancelled (server shutdown, reload). Mark the row failed
+        # synchronously so the UI shows the failure on next read instead of a
+        # frozen "running" state, then re-raise so asyncio cleanup runs.
+        logger.warning("Actor %s cancelled mid-run (job=%s)", actor_id, job_id)
+        _record_actor_failure(
+            job_id,
+            result_id,
+            "Run interrupted — the server was stopped or restarted before this scraper finished. Run the scraper again to retry.",
+        )
+        try:
+            CompetitorAnalysisJobRepository(get_session_local()()).mark_failed(
+                job_id, "Server shutdown interrupted this scrape."
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        _mark_target_run(target_id, cost_usd=None)
+        raise
     except asyncio.TimeoutError:
         _record_actor_failure(job_id, result_id, f"timeout after {timeout + 60}s")
         await _finalize_ledger(client, ledger_id, run_id=None, success=False)
