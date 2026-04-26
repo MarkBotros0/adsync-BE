@@ -13,9 +13,10 @@ class UserRepository(BaseRepository[UserModel]):
         super().__init__(UserModel, db)
 
     def get_by_email(self, email: str) -> UserModel | None:
+        normalized = email.strip().lower() if isinstance(email, str) else email
         return (
             self.db.query(UserModel)
-            .filter(UserModel.email == email, UserModel.deleted_at.is_(None))
+            .filter(UserModel.email == normalized, UserModel.deleted_at.is_(None))
             .first()
         )
 
@@ -54,8 +55,9 @@ class UserRepository(BaseRepository[UserModel]):
         role: UserRole = UserRole.NORMAL,
     ) -> UserModel:
         """Create a user record. Use UserBrandRepository.create_membership to link to brands."""
+        normalized_email = email.strip().lower() if isinstance(email, str) else email
         user = UserModel(
-            email=email,
+            email=normalized_email,
             hashed_password=hashed_password,
             name=name,
             role=role,

@@ -25,7 +25,12 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends
 from jose import JWTError, jwt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
+
+
+def _normalize_email(value: str) -> str:
+    """Lowercase and strip an email. Used by request validators and repos."""
+    return value.strip().lower() if isinstance(value, str) else value
 
 from app.config import get_settings
 from app.database import get_session_local
@@ -136,10 +141,20 @@ class RegisterRequest(BaseModel):
     password: str
     subscription_name: str | None = "free"
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lc_email(cls, v: str) -> str:
+        return _normalize_email(v)
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lc_email(cls, v: str) -> str:
+        return _normalize_email(v)
 
 
 class SelectBrandRequest(BaseModel):
@@ -155,11 +170,21 @@ class VerifyEmailRequest(BaseModel):
     email: EmailStr
     code: str
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lc_email(cls, v: str) -> str:
+        return _normalize_email(v)
+
 
 class InviteRequest(BaseModel):
     email: EmailStr
     role: str = UserRole.NORMAL.value   # "NORMAL" or "ORG_ADMIN"
     brand_id: int | None = None         # required for NORMAL; omitted for ORG_ADMIN
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lc_email(cls, v: str) -> str:
+        return _normalize_email(v)
 
 
 class AcceptInviteRequest(BaseModel):
@@ -171,11 +196,21 @@ class AcceptInviteRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lc_email(cls, v: str) -> str:
+        return _normalize_email(v)
+
 
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str
     new_password: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lc_email(cls, v: str) -> str:
+        return _normalize_email(v)
 
 
 # ──────────────────────────────────────────────
@@ -786,31 +821,39 @@ async def invite_user(body: InviteRequest, current_user=Depends(require_org_admi
         finally:
             org_repo.db.close()
 
-        # If the user already exists, add them to the org directly
+        # Reject if any pending invitation already exists for this email in this org
+        invite_repo_check = _get_invite_repo()
+        try:
+            if invite_repo_check.get_pending_by_email_and_org(body.email, org_id):
+                raise HTTPException(status_code=409, detail=f"{body.email} already has a pending invitation to this organization")
+        finally:
+            invite_repo_check.db.close()
+
+        # If the user already exists in this org, refuse with a clear error
         user_repo = _get_user_repo()
         try:
             existing_user = user_repo.get_by_email(body.email)
             if existing_user:
                 om_repo = _get_org_membership_repo()
+                ub_repo_check = _get_user_brand_repo()
                 try:
                     if om_repo.get_membership(existing_user.id, org_id):
-                        raise HTTPException(status_code=409, detail="User is already an admin of this organization")
-                    om_repo.create_membership(user_id=existing_user.id, org_id=org_id)
-                    return {
-                        "success": True,
-                        "message": f"{existing_user.email} has been added as an org admin",
-                        "invitation": None,
-                    }
+                        raise HTTPException(status_code=409, detail=f"{existing_user.email} is already an admin of this organization")
+                    # Already a NORMAL member of any brand in this org? Refuse — admin should change role instead.
+                    for m in ub_repo_check.get_brands_for_user(existing_user.id):
+                        if m.brand and m.brand.organization_id == org_id:
+                            raise HTTPException(
+                                status_code=409,
+                                detail=f"{existing_user.email} is already a member of this organization — change their role instead",
+                            )
                 finally:
                     om_repo.db.close()
+                    ub_repo_check.db.close()
         finally:
             user_repo.db.close()
 
         invite_repo = _get_invite_repo()
         try:
-            if invite_repo.get_pending_by_email_and_org(body.email, org_id):
-                raise HTTPException(status_code=409, detail="A pending invitation already exists for this email")
-
             invitation = invite_repo.create_invitation(
                 email=body.email,
                 role=UserRole.ORG_ADMIN.value,
@@ -849,17 +892,37 @@ async def invite_user(body: InviteRequest, current_user=Depends(require_org_admi
         if current_role == UserRole.ORG_ADMIN.value and brand.organization_id != org_id:
             raise HTTPException(status_code=403, detail="Brand does not belong to your organization")
         brand_name = brand.name
+        brand_org_id = brand.organization_id
     finally:
         brand_repo.db.close()
+
+    # Reject if any pending invitation exists for this email — brand-scoped or org-scoped within the same org
+    invite_repo_check = _get_invite_repo()
+    try:
+        if invite_repo_check.get_pending_by_email_and_brand(body.email, body.brand_id):
+            raise HTTPException(status_code=409, detail=f"{body.email} already has a pending invitation to this brand")
+        if brand_org_id and invite_repo_check.get_pending_by_email_and_org(body.email, brand_org_id):
+            raise HTTPException(status_code=409, detail=f"{body.email} already has a pending admin invitation to this organization")
+    finally:
+        invite_repo_check.db.close()
 
     user_repo = _get_user_repo()
     try:
         existing_user = user_repo.get_by_email(body.email)
         if existing_user:
             ub_repo = _get_user_brand_repo()
+            om_repo_check = _get_org_membership_repo()
             try:
                 if ub_repo.get_membership(existing_user.id, body.brand_id):
-                    raise HTTPException(status_code=409, detail="User is already a member of this brand")
+                    raise HTTPException(status_code=409, detail=f"{existing_user.email} is already a member of this brand")
+                if brand_org_id and om_repo_check.get_membership(existing_user.id, brand_org_id):
+                    raise HTTPException(status_code=409, detail=f"{existing_user.email} is already an admin of this organization")
+            finally:
+                ub_repo.db.close()
+                om_repo_check.db.close()
+
+            ub_repo = _get_user_brand_repo()
+            try:
                 ub_repo.create_membership(
                     user_id=existing_user.id,
                     brand_id=body.brand_id,
@@ -877,9 +940,6 @@ async def invite_user(body: InviteRequest, current_user=Depends(require_org_admi
 
     invite_repo = _get_invite_repo()
     try:
-        if invite_repo.get_pending_by_email_and_brand(body.email, body.brand_id):
-            raise HTTPException(status_code=409, detail="A pending invitation already exists for this email")
-
         invitation = invite_repo.create_invitation(
             email=body.email,
             role=UserRole.NORMAL.value,

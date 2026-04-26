@@ -4,6 +4,10 @@ from app.models.invitation import InvitationModel
 from app.repositories.base import BaseRepository
 
 
+def _norm(email: str) -> str:
+    return email.strip().lower() if isinstance(email, str) else email
+
+
 class InvitationRepository(BaseRepository[InvitationModel]):
     """Repository for invitation operations."""
 
@@ -21,7 +25,7 @@ class InvitationRepository(BaseRepository[InvitationModel]):
     ) -> InvitationModel:
         expires_at = datetime.utcnow() + timedelta(hours=expires_hours)
         invitation = InvitationModel(
-            email=email,
+            email=_norm(email),
             brand_id=brand_id,
             organization_id=organization_id,
             role=role,
@@ -35,7 +39,7 @@ class InvitationRepository(BaseRepository[InvitationModel]):
         return (
             self.db.query(InvitationModel)
             .filter(
-                InvitationModel.email == email,
+                InvitationModel.email == _norm(email),
                 InvitationModel.organization_id == org_id,
                 InvitationModel.brand_id.is_(None),
                 InvitationModel.accepted_at.is_(None),
@@ -86,7 +90,7 @@ class InvitationRepository(BaseRepository[InvitationModel]):
         return (
             self.db.query(InvitationModel)
             .filter(
-                InvitationModel.email == email,
+                InvitationModel.email == _norm(email),
                 InvitationModel.brand_id == brand_id,
                 InvitationModel.accepted_at.is_(None),
                 InvitationModel.expires_at > datetime.utcnow(),
