@@ -5,6 +5,7 @@ Each function returns ``(data, summary)`` where:
   * ``summary`` — small dict of headline numbers used in list cards / pills
 """
 import re
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
@@ -33,6 +34,37 @@ def _pick(d: dict[str, Any], *keys: str) -> Any:
         v = d.get(k)
         if v not in (None, "", [], {}):
             return v
+    return None
+
+
+def _to_iso_date(v: Any) -> str | None:
+    """Coerce Apify's mixed date shapes to an ISO-8601 string (YYYY-MM-DD).
+
+    The ``apify/facebook-ads-scraper`` actor emits ``start_date`` / ``end_date``
+    as **Unix seconds** (e.g. ``1735603200``). Passing that to JS ``new Date(n)``
+    interprets it as milliseconds and lands ~20 days after epoch (Jan 1970).
+    Always normalize to a string here so consumers (frontend, pandas
+    aggregations) get a stable type.
+    """
+    if v is None or v == "":
+        return None
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        ts = float(v)
+        if ts > 1e12:
+            ts /= 1000.0
+        try:
+            return datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return None
+        if s.isdigit():
+            return _to_iso_date(int(s))
+        return s
     return None
 
 
@@ -113,8 +145,8 @@ def normalize_facebook_ads(
             "body": _truncate(body_text, 600),
             "cta": _pick(snap, "cta_text", "ctaText") or _pick(raw, "cta_text", "ctaText"),
             "link_url": _pick(snap, "link_url", "linkUrl") or _pick(raw, "link_url", "linkUrl"),
-            "start_date": _pick(raw, "start_date", "startDate", "start_date_string"),
-            "end_date": _pick(raw, "end_date", "endDate", "end_date_string"),
+            "start_date": _to_iso_date(_pick(raw, "start_date", "startDate", "start_date_string")),
+            "end_date": _to_iso_date(_pick(raw, "end_date", "endDate", "end_date_string")),
             "is_active": raw.get("is_active") if raw.get("is_active") is not None else raw.get("isActive"),
             "platforms": _pick(raw, "publisher_platform", "publisherPlatform", "publisher_platforms") or [],
             "regions": _pick(raw, "regions", "eu_total_reach_breakdown") or [],
