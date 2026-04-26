@@ -18,6 +18,7 @@ from app.routers.subscriptions import router as subscriptions_router
 from app.routers.content import feed as content_feed
 from app.routers.admin import router as admin_router
 from app.routers.organizations import router as organizations_router
+from app.routers.competitors import router as competitors_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -113,6 +114,7 @@ app.include_router(subscriptions_router.router)
 app.include_router(content_feed.router)
 app.include_router(admin_router.router)
 app.include_router(organizations_router.router)
+app.include_router(competitors_router.router)
 
 
 @app.on_event("startup")
@@ -131,6 +133,9 @@ async def on_startup():
     import app.models.invitation         # noqa: ensure ORM model is registered
     import app.models.instagram_session  # noqa: ensure ORM model is registered
     import app.models.tiktok_session     # noqa: ensure ORM model is registered
+    import app.models.competitor                    # noqa: ensure ORM model is registered
+    import app.models.competitor_analysis_job       # noqa: ensure ORM model is registered
+    import app.models.competitor_analysis_result    # noqa: ensure ORM model is registered
 
     # Safety net: create any missing tables
     # Retry a few times to handle Neon free-tier cold-start (DB suspends when idle)
@@ -182,6 +187,47 @@ async def on_startup():
         _db.close()
     except Exception as exc:
         logger.warning("Could not clean up stale state entries: %s", exc)
+
+    # Recover orphaned competitor-analysis jobs left running by a previous worker
+    # (uvicorn reload kills BackgroundTasks; this lets the user retry them via Refresh).
+    try:
+        from datetime import datetime, timedelta
+        from app.models.competitor_analysis_job import (
+            CompetitorAnalysisJobModel,
+            JOB_STATUS_FAILED,
+            JOB_STATUS_PENDING,
+            JOB_STATUS_RUNNING,
+        )
+        cutoff = datetime.utcnow() - timedelta(seconds=30)
+        db = get_session_local()()
+        try:
+            stuck = (
+                db.query(CompetitorAnalysisJobModel)
+                .filter(
+                    CompetitorAnalysisJobModel.deleted_at.is_(None),
+                    CompetitorAnalysisJobModel.status.in_(
+                        [JOB_STATUS_PENDING, JOB_STATUS_RUNNING]
+                    ),
+                    CompetitorAnalysisJobModel.created_at < cutoff,
+                )
+                .all()
+            )
+            now = datetime.utcnow()
+            for job in stuck:
+                job.status = JOB_STATUS_FAILED
+                job.error_message = (
+                    "Server restarted before this scrape completed. "
+                    "Click Refresh to try again."
+                )
+                job.finished_at = now
+                job.updated_at = now
+            if stuck:
+                db.commit()
+                logger.info("Recovered %d orphaned competitor-analysis job(s)", len(stuck))
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("Orphan-job recovery skipped: %s", exc)
 
     logger.info("Server ready")
 

@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Super User Credentials
     super_user_email: str = ""
     super_user_password: str = ""
+
+    # Apify (Competitor Analysis)
+    apify_api_token: str = ""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
