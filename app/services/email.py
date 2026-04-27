@@ -32,7 +32,7 @@ def _send_mail_sync(to: str, subject: str, html: str) -> bool:
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"Ad Sync <{settings.gmail_user}>"
+    msg["From"] = f"Echofold <{settings.gmail_user}>"
     msg["To"] = to
     msg.attach(MIMEText(html, "html"))
 
@@ -53,13 +53,71 @@ async def _send_mail(to: str, subject: str, html: str) -> bool:
     return await loop.run_in_executor(None, partial(_send_mail_sync, to, subject, html))
 
 
+def _send_mail_with_attachment_sync(
+    to: str,
+    subject: str,
+    body: str,
+    attachment: bytes,
+    attachment_filename: str,
+    attachment_mime: str,
+) -> bool:
+    """Blocking SMTP send with one binary attachment (used by the report runner)."""
+    if not settings.gmail_user or not settings.gmail_app_password:
+        logger.warning("Email-with-attachment skipped: Gmail credentials not configured")
+        return False
+
+    from email.mime.application import MIMEApplication
+
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
+    msg["From"] = f"Echofold <{settings.gmail_user}>"
+    msg["To"] = to
+    msg.attach(MIMEText(body, "plain"))
+
+    main, _, sub = (attachment_mime or "application/octet-stream").partition("/")
+    part = MIMEApplication(attachment, _subtype=sub or "octet-stream")
+    part.add_header("Content-Disposition", "attachment", filename=attachment_filename)
+    msg.attach(part)
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(settings.gmail_user, settings.gmail_app_password)
+            server.sendmail(settings.gmail_user, to, msg.as_string())
+        return True
+    except Exception as e:  # noqa: BLE001
+        logger.error("Failed to send email to %s: %s", to, e)
+        return False
+
+
+async def send_email_with_attachment(
+    *,
+    to: str,
+    subject: str,
+    body: str,
+    attachment: bytes,
+    attachment_filename: str,
+    attachment_mime: str,
+) -> bool:
+    """Async wrapper used by the scheduled-report runner."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        partial(
+            _send_mail_with_attachment_sync,
+            to, subject, body, attachment, attachment_filename, attachment_mime,
+        ),
+    )
+
+
 async def send_verification_email(email: str, code: str, type: str = "signup") -> bool:
     """Send a 6-digit OTP for signup or password reset.
 
     Mirrors sendVerificationEmail() in Refs Project lib/email.ts.
     """
     subject = "Verification Code" if type == "signup" else "Password Reset Code"
-    greeting = "Welcome to Ad Sync!" if type == "signup" else "Password Reset Request"
+    greeting = "Welcome to Echofold!" if type == "signup" else "Password Reset Request"
     intro = (
         "To complete your registration, please use the verification code below."
         if type == "signup"
@@ -84,10 +142,10 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
 
           <div style="background:linear-gradient(135deg,#1d1d28 0%,#15151d 100%);padding:32px 30px;text-align:center;border-bottom:1px solid #28283a;">
             <div style="display:inline-block;background-color:#2d1b4e;border-radius:10px;padding:8px 16px;margin-bottom:16px;">
-              <span style="color:#c084fc;font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;">Ad Sync</span>
+              <span style="color:#06b6d4;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;">&#9679; Listening</span>&nbsp;&nbsp;<span style="color:#e9d5ff;font-size:14px;font-weight:700;letter-spacing:0.3px;">Echofold</span>
             </div>
             <h1 style="color:#f1e8ff;font-size:22px;font-weight:700;margin:0 0 6px 0;">{greeting}</h1>
-            <p style="color:#9f7bc0;font-size:13px;margin:0;">Ad Sync Platform</p>
+            <p style="color:#9f7bc0;font-size:13px;margin:0;">Brand Intelligence Platform</p>
           </div>
 
           <div style="padding:36px 30px;background-color:#15151d;">
@@ -118,7 +176,7 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
           </div>
 
           <div style="background-color:#0e0e13;padding:18px;text-align:center;border-top:1px solid #28283a;">
-            <p style="font-size:12px;color:#4a3a5e;margin:0;">&copy; {datetime.now().year} Ad Sync Platform. All rights reserved.</p>
+            <p style="font-size:12px;color:#4a3a5e;margin:0;">&copy; {datetime.now().year} Echofold. All rights reserved.</p>
           </div>
 
         </div>
@@ -127,7 +185,7 @@ async def send_verification_email(email: str, code: str, type: str = "signup") -
     </html>
     """
 
-    return await _send_mail(email, f"Ad Sync - {subject}", html)
+    return await _send_mail(email, f"Echofold · {subject}", html)
 
 
 async def send_invitation_email(
@@ -150,7 +208,7 @@ async def send_invitation_email(
         context_line = (
             f'<strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to become an '
             f'<strong style="color:#e9d5ff;">Admin</strong> of '
-            f'<strong style="color:#e9d5ff;">{org_name}</strong> on Ad Sync.'
+            f'<strong style="color:#e9d5ff;">{org_name}</strong> on Echofold.'
         )
         role_badge = (
             '<div style="display:inline-block;background-color:#3b1f6e;border:1px solid #7c3aed;'
@@ -162,7 +220,7 @@ async def send_invitation_email(
     else:
         context_line = (
             f'<strong style="color:#e9d5ff;">{inviter_name}</strong> has invited you to join '
-            f'<strong style="color:#e9d5ff;">{org_name}</strong> on Ad Sync.'
+            f'<strong style="color:#e9d5ff;">{org_name}</strong> on Echofold.'
         )
         role_badge = ''
         cta_note = 'Click the button below to set your password and access your account.'
@@ -180,10 +238,10 @@ async def send_invitation_email(
 
           <div style="background:linear-gradient(135deg,#1d1d28 0%,#15151d 100%);padding:32px 30px;text-align:center;border-bottom:1px solid #28283a;">
             <div style="display:inline-block;background-color:#2d1b4e;border-radius:10px;padding:8px 16px;margin-bottom:16px;">
-              <span style="color:#c084fc;font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;">Ad Sync</span>
+              <span style="color:#06b6d4;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;">&#9679; Listening</span>&nbsp;&nbsp;<span style="color:#e9d5ff;font-size:14px;font-weight:700;letter-spacing:0.3px;">Echofold</span>
             </div>
             <h1 style="color:#f1e8ff;font-size:22px;font-weight:700;margin:0 0 6px 0;">You've been invited!</h1>
-            <p style="color:#9f7bc0;font-size:13px;margin:0;">Ad Sync Platform</p>
+            <p style="color:#9f7bc0;font-size:13px;margin:0;">Brand Intelligence Platform</p>
           </div>
 
           <div style="padding:36px 30px;background-color:#15151d;">
@@ -223,7 +281,7 @@ async def send_invitation_email(
           </div>
 
           <div style="background-color:#0e0e13;padding:18px;text-align:center;border-top:1px solid #28283a;">
-            <p style="font-size:12px;color:#4a3a5e;margin:0;">&copy; {datetime.now().year} Ad Sync Platform. All rights reserved.</p>
+            <p style="font-size:12px;color:#4a3a5e;margin:0;">&copy; {datetime.now().year} Echofold. All rights reserved.</p>
           </div>
 
         </div>
@@ -232,4 +290,4 @@ async def send_invitation_email(
     </html>
     """
 
-    return await _send_mail(email, "Ad Sync - You've been invited", html)
+    return await _send_mail(email, "Echofold · You've been invited", html)
