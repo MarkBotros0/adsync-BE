@@ -18,6 +18,14 @@ _STORY_METRICS = [
     "replies", "shares", "total_interactions", "profile_visits", "follows",
 ]
 
+# Newer total_value-based account metrics — surfaced as headline KPIs.
+_ENGAGEMENT_TOTAL_METRICS = [
+    "total_interactions", "likes", "comments", "shares", "saves",
+    "reach", "accounts_engaged", "replies",
+    "profile_links_taps", "phone_call_clicks",
+    "text_message_clicks", "get_directions_clicks",
+]
+
 
 class InstagramInsightsService(InstagramAPIClient):
     """Service for Instagram account-level and media-level insights."""
@@ -119,18 +127,115 @@ class InstagramInsightsService(InstagramAPIClient):
     async def _fetch_engagement_totals(
         self, ig_user_id: str, timeframe: str = "last_30_days"
     ) -> dict[str, Any]:
-        """Fetch aggregated engagement totals using the newer metric_type API."""
+        """Fetch aggregated engagement totals using the newer metric_type API.
+
+        Includes the action-tap metrics (profile links, phone, text, directions) that
+        were missing from the v1 set so the dashboard can show "what did people do
+        when they reached the profile?".
+        """
         try:
             return await self.get(
                 f"{ig_user_id}/insights",
                 params={
-                    "metric": "total_interactions,likes,comments,shares,saves,reach,accounts_engaged",
+                    "metric": ",".join(_ENGAGEMENT_TOTAL_METRICS),
                     "metric_type": "total_value",
                     "timeframe": timeframe,
                 },
             )
         except Exception as e:
             return {"data": [], "error": str(e)}
+
+    async def fetch_engagement_totals(
+        self, ig_user_id: str, days: int = 30
+    ) -> dict[str, Any]:
+        """Public wrapper exposing the engagement totals as a structured dict."""
+        raw = await self._fetch_engagement_totals(
+            ig_user_id, timeframe=_days_to_timeframe(days)
+        )
+        return self._format_engagement_totals(raw)
+
+    async def fetch_reach_by_follow_type(
+        self,
+        ig_user_id: str,
+        days: int = 30,
+    ) -> dict[str, Any]:
+        """Reach split by ``follow_type`` (FOLLOWER vs NON_FOLLOWER).
+
+        Uses the v22 breakdowns API. Returns ``{ FOLLOWER: int, NON_FOLLOWER: int }``.
+        """
+        try:
+            raw = await self.get(
+                f"{ig_user_id}/insights",
+                params={
+                    "metric": "reach",
+                    "metric_type": "total_value",
+                    "breakdown": "follow_type",
+                    "timeframe": _days_to_timeframe(days),
+                },
+            )
+        except Exception as e:
+            return {"breakdown": {}, "error": str(e)}
+
+        bucket: dict[str, int] = {}
+        for entry in raw.get("data", []):
+            tv = entry.get("total_value") or {}
+            for breakdown in tv.get("breakdowns", []):
+                for v in breakdown.get("results", []):
+                    key = "_".join(v.get("dimension_values") or []) or "unknown"
+                    bucket[key] = bucket.get(key, 0) + int(v.get("value") or 0)
+        return {"breakdown": bucket}
+
+    async def fetch_reach_by_media_product_type(
+        self,
+        ig_user_id: str,
+        days: int = 30,
+    ) -> dict[str, Any]:
+        """Reach split by ``media_product_type`` (POST vs REEL vs STORY)."""
+        try:
+            raw = await self.get(
+                f"{ig_user_id}/insights",
+                params={
+                    "metric": "reach",
+                    "metric_type": "total_value",
+                    "breakdown": "media_product_type",
+                    "timeframe": _days_to_timeframe(days),
+                },
+            )
+        except Exception as e:
+            return {"breakdown": {}, "error": str(e)}
+
+        bucket: dict[str, int] = {}
+        for entry in raw.get("data", []):
+            tv = entry.get("total_value") or {}
+            for breakdown in tv.get("breakdowns", []):
+                for v in breakdown.get("results", []):
+                    key = "_".join(v.get("dimension_values") or []) or "unknown"
+                    bucket[key] = bucket.get(key, 0) + int(v.get("value") or 0)
+        return {"breakdown": bucket}
+
+    async def fetch_stories(self, ig_user_id: str, limit: int = 25) -> list[dict[str, Any]]:
+        """List the brand's recent stories. The Stories edge only returns active items
+        (24h window) — historic insights need to be polled before they expire.
+        """
+        try:
+            raw = await self.get(
+                f"{ig_user_id}/stories",
+                params={
+                    "fields": "id,media_type,media_url,permalink,thumbnail_url,timestamp",
+                    "limit": limit,
+                },
+            )
+            return raw.get("data", [])
+        except Exception:
+            return []
+
+    async def fetch_story_insights(self, story_id: str) -> dict[str, Any]:
+        """Per-story metrics: taps_forward / taps_back / exits / replies / reach.
+
+        Stories disappear after 24h so this must be polled inside the window. The
+        returned shape matches ``fetch_media_insights`` for a STORY product type.
+        """
+        return await self.fetch_media_insights(story_id, media_product_type="STORY")
 
     async def fetch_audience_demographics(self, ig_user_id: str) -> dict[str, Any]:
         """
@@ -213,15 +318,7 @@ class InstagramInsightsService(InstagramAPIClient):
 
     def _format_engagement_totals(self, raw: dict[str, Any]) -> dict[str, Any]:
         data = raw.get("data", [])
-        result: dict[str, Any] = {
-            "total_interactions": 0,
-            "likes": 0,
-            "comments": 0,
-            "shares": 0,
-            "saves": 0,
-            "reach": 0,
-            "accounts_engaged": 0,
-        }
+        result: dict[str, Any] = {m: 0 for m in _ENGAGEMENT_TOTAL_METRICS}
         for item in data:
             name = item.get("name")
             total_value = item.get("total_value", {})

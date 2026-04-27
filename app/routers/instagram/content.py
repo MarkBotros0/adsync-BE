@@ -1,6 +1,12 @@
 """Instagram media, stories, reels, and tagged-media endpoints."""
-from fastapi import APIRouter, HTTPException
+from typing import Any
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.database import get_session_local
+from app.dependencies import require_brand
+from app.repositories.instagram_session import InstagramSessionRepository
+from app.services.instagram.comments import InstagramCommentsService
 from app.services.instagram.media import InstagramMediaService
 from app.routers.instagram.session import get_instagram_session
 
@@ -250,6 +256,33 @@ async def get_media_comments(media_id: str, session_id: str, limit: int = 50):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to fetch comments: {str(e)}")
+
+
+@router.get("/v2/media/{media_id}/comments/analysis")
+async def get_comments_analysis_v2(
+    media_id: str,
+    brand=Depends(require_brand),
+    limit: int = Query(50, ge=1, le=50),
+    include_replies: bool = Query(True),
+) -> dict[str, Any]:
+    """Comment thread + per-comment sentiment + thread roll-up.
+
+    Brand-JWT authenticated. Drives the comments drawer on the /content page and the
+    sentiment chip on each post row.
+    """
+    db = get_session_local()()
+    try:
+        sess = InstagramSessionRepository(db).get_by_brand_id(brand.id)
+        if not sess:
+            raise HTTPException(status_code=404, detail="Instagram not connected for this brand")
+        token = sess.access_token
+    finally:
+        db.close()
+
+    svc = InstagramCommentsService(access_token=token)
+    return {"success": True, "data": await svc.fetch_with_sentiment(
+        media_id, limit=limit, include_replies=include_replies,
+    )}
 
 
 @router.get("/media/{media_id}/children")

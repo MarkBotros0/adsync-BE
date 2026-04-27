@@ -70,3 +70,7 @@ bcrypt==4.0.1
 
 # Competitor Analysis (Apify)
 apify-client==1.8.1
+
+# Reports (PDF generation) + benchmark verification (Excel parsing)
+reportlab==4.2.5
+openpyxl==3.1.5

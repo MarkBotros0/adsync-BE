@@ -469,6 +469,147 @@ class InsightsService(APIClient):
         
         return result
     
+    # ── Demographics & reach split (Page Insights v2) ──────────────────────────
+
+    async def fetch_page_demographics(
+        self,
+        page_id: str,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch age/gender/city/country/locale breakdown of unique impressions.
+
+        These are the four ``page_impressions_by_*_unique`` metrics. The Graph API
+        returns each as a single object whose ``value`` is a dict keyed by the breakdown
+        dimension (e.g. ``"M.25-34": 4321`` or ``"London, England": 1234``).
+        """
+        metrics = [
+            "page_impressions_by_age_gender_unique",
+            "page_impressions_by_city_unique",
+            "page_impressions_by_country_unique",
+            "page_impressions_by_locale_unique",
+        ]
+        params: dict[str, Any] = {
+            "metric": ",".join(metrics),
+            "period": "day",
+        }
+        if since:
+            params["since"] = since
+        if until:
+            params["until"] = until
+
+        try:
+            raw = await self.get(f"{page_id}/insights", params=params)
+        except FacebookAPIError as exc:
+            return {"data": [], "error": str(exc)}
+
+        return {"page_id": page_id, "demographics": self._format_demographics(raw)}
+
+    async def fetch_page_reach_breakdown(
+        self,
+        page_id: str,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch paid / organic / viral reach + impression splits.
+
+        Returns time-series for each metric so the FE can stack them into an area chart.
+        """
+        metrics = [
+            "page_impressions_organic_unique",
+            "page_impressions_paid_unique",
+            "page_impressions_viral_unique",
+            "page_impressions_organic",
+            "page_impressions_paid",
+            "page_impressions_viral",
+        ]
+        params: dict[str, Any] = {
+            "metric": ",".join(metrics),
+            "period": "day",
+        }
+        if since:
+            params["since"] = since
+        if until:
+            params["until"] = until
+
+        try:
+            raw = await self.get(f"{page_id}/insights", params=params)
+        except FacebookAPIError as exc:
+            return {"data": [], "error": str(exc)}
+
+        return {"page_id": page_id, "series": self._format_timeseries(raw)}
+
+    async def fetch_page_frequency(
+        self,
+        page_id: str,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch the frequency-distribution histogram (how many times the audience saw us)."""
+        params: dict[str, Any] = {
+            "metric": "page_impressions_frequency_distribution",
+            "period": "day",
+        }
+        if since:
+            params["since"] = since
+        if until:
+            params["until"] = until
+
+        try:
+            raw = await self.get(f"{page_id}/insights", params=params)
+        except FacebookAPIError as exc:
+            return {"data": [], "error": str(exc)}
+
+        return {"page_id": page_id, "distribution": self._format_distribution(raw)}
+
+    # ── Demographic / time-series formatters ───────────────────────────────────
+
+    @staticmethod
+    def _format_demographics(raw: dict[str, Any]) -> dict[str, dict[str, int]]:
+        """Reduce each ``page_impressions_by_*_unique`` metric to a ``{key: value}`` map.
+
+        Sums values across days in the window so the FE can render a single chart per
+        breakdown dimension.
+        """
+        out: dict[str, dict[str, int]] = {}
+        for metric in raw.get("data", []):
+            name = metric.get("name", "")
+            short = name.replace("page_impressions_by_", "").replace("_unique", "")
+            bucket: dict[str, int] = {}
+            for value_entry in metric.get("values", []):
+                payload = value_entry.get("value") or {}
+                if isinstance(payload, dict):
+                    for key, count in payload.items():
+                        bucket[key] = bucket.get(key, 0) + int(count or 0)
+            out[short] = bucket
+        return out
+
+    @staticmethod
+    def _format_timeseries(raw: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+        """Reduce each metric to a list of ``{date, value}`` rows."""
+        out: dict[str, list[dict[str, Any]]] = {}
+        for metric in raw.get("data", []):
+            series = []
+            for entry in metric.get("values", []):
+                series.append({
+                    "date": entry.get("end_time"),
+                    "value": entry.get("value") or 0,
+                })
+            out[metric.get("name", "")] = series
+        return out
+
+    @staticmethod
+    def _format_distribution(raw: dict[str, Any]) -> list[dict[str, Any]]:
+        """Sum the frequency-distribution buckets across the window into one histogram."""
+        totals: dict[str, int] = {}
+        for metric in raw.get("data", []):
+            for entry in metric.get("values", []):
+                payload = entry.get("value") or {}
+                if isinstance(payload, dict):
+                    for bucket, count in payload.items():
+                        totals[bucket] = totals.get(bucket, 0) + int(count or 0)
+        return [{"bucket": k, "count": v} for k, v in sorted(totals.items())]
+
     async def fetch_page_posts_insights_batch(self, page_id: str, limit: int = 25) -> dict[str, Any]:
         """Fetch posts with their insights in batch"""
         try:

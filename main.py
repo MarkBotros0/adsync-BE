@@ -7,12 +7,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.facebook import auth, ads, pages
+from app.routers.facebook import insights as facebook_insights
 from app.routers.instagram import auth as instagram_auth
 from app.routers.instagram import accounts as instagram_accounts
 from app.routers.instagram import content as instagram_content
 from app.routers.instagram import insights as instagram_insights
 from app.routers.tiktok import auth as tiktok_auth
 from app.routers.tiktok import content as tiktok_content
+from app.routers.tiktok import ads as tiktok_ads
+from app.routers.ads import feed as ads_feed
+from app.routers.analytics import overview as analytics_overview
+from app.routers.campaign_tags import router as campaign_tags_router
+from app.routers.publish import compose as publish_compose
+from app.routers.publish import calendar as publish_calendar
+from app.routers.publish import media as publish_media
+from app.routers.reports import router as reports_router
+from app.routers.brands import identity as brands_identity
+from app.routers.brands import client_views as brands_client_views
 from app.routers.brands import auth as brands_auth
 from app.routers.subscriptions import router as subscriptions_router
 from app.routers.content import feed as content_feed
@@ -104,12 +115,23 @@ if os.path.exists(static_dir):
 app.include_router(auth.router)
 app.include_router(ads.router)
 app.include_router(pages.router)
+app.include_router(facebook_insights.router)
 app.include_router(instagram_auth.router)
 app.include_router(instagram_accounts.router)
 app.include_router(instagram_content.router)
 app.include_router(instagram_insights.router)
 app.include_router(tiktok_auth.router)
 app.include_router(tiktok_content.router)
+app.include_router(tiktok_ads.router)
+app.include_router(ads_feed.router)
+app.include_router(analytics_overview.router)
+app.include_router(campaign_tags_router.router)
+app.include_router(publish_compose.router)
+app.include_router(publish_calendar.router)
+app.include_router(publish_media.router)
+app.include_router(reports_router.router)
+app.include_router(brands_identity.router)
+app.include_router(brands_client_views.router)
 app.include_router(brands_auth.router)
 app.include_router(subscriptions_router.router)
 app.include_router(content_feed.router)
@@ -140,6 +162,13 @@ async def on_startup():
     import app.models.competitor_analysis_result    # noqa: ensure ORM model is registered
     import app.models.competitor_target              # noqa: ensure ORM model is registered
     import app.models.apify_run                       # noqa: ensure ORM model is registered
+    import app.models.campaign_tag                    # noqa
+    import app.models.media_asset                     # noqa
+    import app.models.scheduled_post                  # noqa
+    import app.models.report_schedule                 # noqa
+    import app.models.report_run                      # noqa
+    import app.models.brand_identity                  # noqa
+    import app.models.client_view                     # noqa
 
     # Safety net: create any missing tables
     # Retry a few times to handle Neon free-tier cold-start (DB suspends when idle)
@@ -264,6 +293,23 @@ async def on_startup():
             db.close()
     except Exception as exc:
         logger.warning("Orphan-job recovery skipped: %s", exc)
+
+    # Publisher + scheduled-report loops — in-process asyncio tasks (no Redis/worker
+    # per the deployment constraint). Recover orphaned in-flight rows first so
+    # restart-during-publish does not leave them stuck.
+    try:
+        from app.services.publisher.loop import (
+            publish_pending_loop,
+            recover_orphans,
+            send_due_reports_loop,
+        )
+        recover_orphans()
+        import asyncio as _asyncio_for_loops
+        _asyncio_for_loops.create_task(publish_pending_loop())
+        _asyncio_for_loops.create_task(send_due_reports_loop())
+        logger.info("Publisher + report loops started")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Publisher loops failed to start: %s", exc)
 
     logger.info("Server ready")
 

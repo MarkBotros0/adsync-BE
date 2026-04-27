@@ -12,7 +12,7 @@ from app.repositories.facebook_session import FacebookSessionRepository
 from app.repositories.instagram_session import InstagramSessionRepository
 from app.repositories.tiktok_session import TikTokSessionRepository
 from app.database import get_session_local
-from app.services.facebook.pages import PagesService
+from app.services.facebook.pages import PagesService, extract_reaction_breakdown
 from app.services.instagram.media import InstagramMediaService
 from app.services.instagram.insights import InstagramInsightsService
 from app.services.tiktok.videos import TikTokVideoService
@@ -48,6 +48,28 @@ def _parse_dt(val: str | None) -> datetime | None:
 
 # ── Transformers ──────────────────────────────────────────────────────────────
 
+def _fb_post_format(post: dict[str, Any]) -> str:
+    """Map a Facebook post's `type`/`status_type` to the unified post_format vocab."""
+    t = (post.get("type") or "").lower()
+    if t == "video":
+        return "Video"
+    if t == "photo":
+        return "Image"
+    if t == "album":
+        return "Carousel"
+    return "Post"
+
+
+def _fb_image_url(post: dict[str, Any]) -> str | None:
+    """Best-effort extraction of a thumbnail/image URL from a post's attachments."""
+    attachments = ((post.get("attachments") or {}).get("data") or [])
+    for att in attachments:
+        media = (att.get("media") or {}).get("image") or {}
+        if media.get("src"):
+            return media["src"]
+    return None
+
+
 def _fb_to_mentions(posts: list[dict[str, Any]], page_name: str) -> list[dict[str, Any]]:
     result = []
     for p in posts:
@@ -57,6 +79,7 @@ def _fb_to_mentions(posts: list[dict[str, Any]], page_name: str) -> list[dict[st
         eng = p.get("engagement") or {}
         total = eng.get("total", 0)
         reactions = eng.get("reactions", 0)
+        breakdown = p.get("reactions_breakdown") or {}
         result.append({
             "id": p["id"],
             "platform": "facebook",
@@ -74,8 +97,9 @@ def _fb_to_mentions(posts: list[dict[str, Any]], page_name: str) -> list[dict[st
             "performance": _perf(total),
             "language": "en",
             "hashtags": _hashtags(msg),
-            "image_url": None,
-            "post_format": "Post",
+            "image_url": p.get("image_url"),
+            "post_format": p.get("post_format") or "Post",
+            "reactions_breakdown": breakdown,
         })
     return result
 
@@ -192,7 +216,8 @@ async def _fetch_facebook(brand_id: int) -> list[dict[str, Any]]:
         raw = await posts_svc.fetch_page_posts(page_id, limit=50)
         posts_raw = raw.get("data", [])
 
-        # Transform engagement (matches existing router logic)
+        # Transform engagement (matches existing router logic) plus the new
+        # per-reaction-type breakdown and post format/attachments.
         transformed = []
         for p in posts_raw:
             likes = p.get("likes", {}).get("summary", {}).get("total_count", 0)
@@ -205,6 +230,9 @@ async def _fetch_facebook(brand_id: int) -> list[dict[str, Any]]:
                 "story": p.get("story", ""),
                 "created_time": p.get("created_time"),
                 "permalink_url": p.get("permalink_url"),
+                "post_format": _fb_post_format(p),
+                "image_url": _fb_image_url(p),
+                "reactions_breakdown": extract_reaction_breakdown(p),
                 "engagement": {
                     "likes": likes,
                     "comments": comments,
@@ -346,6 +374,7 @@ def _normalize_fb_insights(
         "shares": shares,
         "total_interactions": total,
         "media_product_type": "POST",
+        "reactions_breakdown": post.get("reactions_breakdown") or {},
     }
 
 
@@ -534,7 +563,10 @@ async def get_post_insights(
             shares = post.get("shares", {}).get("count", 0)
             reactions = post.get("reactions", {}).get("summary", {}).get("total_count", 0)
             eng = {"likes": likes, "comments": comments, "shares": shares, "reactions": reactions, "total": likes + comments + shares}
-            return {"success": True, "data": _normalize_fb_insights({"engagement": eng}, post_id)}
+            breakdown = extract_reaction_breakdown(post)
+            return {"success": True, "data": _normalize_fb_insights(
+                {"engagement": eng, "reactions_breakdown": breakdown}, post_id,
+            )}
         except Exception as e:
             logger.warning("Failed to fetch Facebook post insights for %s: %s", post_id, e)
             return {"success": False, "error": str(e)}
