@@ -48,7 +48,7 @@ def _validate_user_and_brand(token: str):
 
         virtual_user = UserModel(
             id=0,
-            email=payload.get("email", "super@adsync.com"),
+            email=payload.get("email", "super@echofold.com"),
             name="Super Admin",
             role=UserRole.SUPER,
             session_key=token_session_key,

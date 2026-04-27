@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: adsync_pgsql
+      POSTGRES_DB: echofold_pgsql
     volumes:
       # This attaches the volume to the Postgres data folder
       - postgres_data:/var/lib/postgresql/data
